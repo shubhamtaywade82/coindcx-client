@@ -82,6 +82,39 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
       expect(second_payload).not_to eq(first_payload)
       expect(second_payload.fetch("authSignature")).to end_with("-renewed")
     end
+
+    it "does not reconnect a quiet private subscription" do
+      now = 100.0
+      handlers = {}
+      clock = -> { now }
+
+      allow(backend).to receive(:connect)
+      allow(backend).to receive(:on) do |event_name, &block|
+        handlers[event_name] = block
+      end
+
+      threads = []
+      thread_factory = lambda do |&block|
+        threads << block
+        instance_double("Thread")
+      end
+
+      client = described_class.new(
+        configuration: configuration,
+        backend: backend,
+        sleeper: sleeper,
+        thread_factory: thread_factory,
+        monotonic_clock: clock
+      )
+      client.connect
+      client.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT)
+
+      now += 2.0
+      threads.first.call
+
+      expect(backend).to have_received(:connect).once
+      expect(client.alive?).to be(true)
+    end
   end
 
   describe "#connect" do

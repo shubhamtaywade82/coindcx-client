@@ -59,6 +59,10 @@ module CoinDCX
         snapshot.any?(&:private_channel?)
       end
 
+      def public_subscriptions?
+        snapshot.any? { |subscription| !subscription.private_channel? }
+      end
+
       private
 
       def include?(candidate)

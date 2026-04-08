@@ -100,9 +100,11 @@ jobs:
       - name: Verify built artifact
         run: |
           ls -1 coindcx-client-*.gem
-          gem specification coindcx-client-*.gem name version platform > /tmp/gem-spec.txt
+          gem specification coindcx-client-*.gem version > /tmp/gem-version.txt
+          gem specification coindcx-client-*.gem name platform > /tmp/gem-spec.txt
+          cat /tmp/gem-version.txt
           cat /tmp/gem-spec.txt
-          if ! rg "^version: ${{ steps.release_version.outputs.value }}$" /tmp/gem-spec.txt; then
+          if ! rg "${{ steps.release_version.outputs.value }}" /tmp/gem-version.txt; then
             echo "Built gem version does not match release version"
             exit 1
           fi

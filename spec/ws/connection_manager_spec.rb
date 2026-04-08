@@ -85,6 +85,24 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
         { "channelName" => "coindcx", "authSignature" => "second", "apiKey" => "api-key" }
       ).once
     end
+
+    it "does not reconnect a quiet private subscription just because no payload arrived" do
+      manager.connect
+      manager.subscribe(
+        type: :private,
+        channel_name: "coindcx",
+        event_name: "order-update",
+        payload_builder: -> { { "channelName" => "coindcx", "authSignature" => "first", "apiKey" => "api-key" } },
+        delivery_mode: :at_least_once
+      )
+
+      now[:value] += 2.0
+
+      manager.send(:check_liveness!)
+
+      expect(backend).to have_received(:connect).once
+      expect(backend).not_to have_received(:disconnect)
+    end
   end
 
   describe "#alive?" do

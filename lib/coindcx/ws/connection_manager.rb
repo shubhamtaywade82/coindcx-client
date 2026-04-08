@@ -85,7 +85,20 @@ module CoinDCX
         begin
           attempts += 1
           establish_connection
-        rescue Errors::SocketConnectionError, Errors::SocketAuthenticationError => error
+        rescue Errors::SocketAuthenticationError => error
+          transition_to(:failed)
+          log(
+            :error,
+            event: "ws_failed",
+            endpoint: configuration.socket_base_url,
+            retries: attempts - 1,
+            latency: nil,
+            error_class: error.class.name,
+            message: error.message,
+            subscription_count: subscriptions.count
+          )
+          raise error
+        rescue Errors::SocketConnectionError => error
           handle_reconnect_failure(attempts, error)
           retry
         end
@@ -227,19 +240,30 @@ module CoinDCX
         return unless heartbeat_required?
         return unless stale_connection?
 
+        timeout_error = Errors::SocketHeartbeatTimeoutError.new(
+          "CoinDCX websocket heartbeat timed out",
+          category: :socket_timeout,
+          code: "socket_heartbeat_timeout",
+          retryable: true
+        )
         log(
           :warn,
           event: "ws_heartbeat_stale",
           endpoint: configuration.socket_base_url,
           retries: 0,
           latency: liveness_age,
-          subscription_count: subscriptions.count
+          subscription_count: subscriptions.count,
+          error_class: timeout_error.class.name,
+          message: timeout_error.message
         )
         reconnect
       end
 
       def heartbeat_required?
-        state.connected? && subscriptions.any?
+        return false unless state.connected?
+        return false unless subscriptions.any?
+
+        subscriptions.public_subscriptions?
       end
 
       def stale_connection?
