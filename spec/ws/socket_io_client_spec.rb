@@ -32,6 +32,26 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
     allow(backend).to receive(:disconnect)
   end
 
+  describe "#leave_channel" do
+    it "emits leave with a validated channelName" do
+      allow(backend).to receive(:connect)
+
+      client = described_class.new(
+        configuration: configuration,
+        backend: backend,
+        sleeper: sleeper,
+        thread_factory: thread_factory_without_run
+      )
+      client.connect
+      client.leave_channel(channel_name: "B-BTC_USDT@prices")
+
+      expect(backend).to have_received(:emit).with(
+        "leave",
+        { "channelName" => "B-BTC_USDT@prices" }
+      )
+    end
+  end
+
   describe "#subscribe_public" do
     it "does not re-emit joins on socket :connect alone; recovery rejoins after a rebuilt connection" do
       handlers = {}

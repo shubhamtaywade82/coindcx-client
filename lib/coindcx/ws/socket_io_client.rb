@@ -45,6 +45,16 @@ module CoinDCX
         connection_manager.alive?
       end
 
+      # Emits Socket.IO `leave` per CoinDCX docs. Does not remove handlers or registry entries; after a
+      # reconnect, {#subscribe_public} / {#subscribe_private} intents are still re-joined automatically.
+      def leave_channel(channel_name:)
+        backend.emit(
+          "leave",
+          { "channelName" => Contracts::ChannelName.validate!(channel_name) }
+        )
+        self
+      end
+
       private
 
       attr_reader :configuration, :backend, :private_channels, :connection_manager

@@ -3,7 +3,10 @@
 module CoinDCX
   module WS
     module PublicChannels
-      VALID_SPOT_ORDER_BOOK_DEPTHS = [20, 50].freeze
+      VALID_SPOT_ORDER_BOOK_DEPTHS = [10, 20, 50].freeze
+      VALID_CURRENT_PRICES_SPOT_INTERVALS = %w[1s 10s].freeze
+      CURRENT_PRICES_SPOT_UPDATE_EVENT = "currentPrices@spot#update"
+      PRICE_STATS_SPOT_UPDATE_EVENT = "priceStats@spot#update"
 
       module_function
 
@@ -15,7 +18,21 @@ module CoinDCX
         return "#{Contracts::Identifiers.validate_pair!(pair)}@orderbook@#{depth}" if VALID_SPOT_ORDER_BOOK_DEPTHS.include?(depth)
 
         raise Errors::ValidationError,
-              "spot order book updates are snapshot-based and only documented for depths #{VALID_SPOT_ORDER_BOOK_DEPTHS.join(', ')}"
+              "spot order book updates are snapshot-based and only documented for depths #{VALID_SPOT_ORDER_BOOK_DEPTHS.sort.join(', ')}"
+      end
+
+      def current_prices_spot(interval:)
+        key = interval.to_s.strip
+        unless VALID_CURRENT_PRICES_SPOT_INTERVALS.include?(key)
+          raise Errors::ValidationError,
+                "currentPrices@spot intervals must be one of #{VALID_CURRENT_PRICES_SPOT_INTERVALS.join(', ')}"
+        end
+
+        "currentPrices@spot@#{key}"
+      end
+
+      def price_stats_spot
+        "priceStats@spot@60s"
       end
 
       def price_stats(pair:)

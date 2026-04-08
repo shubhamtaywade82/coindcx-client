@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# IRB with CoinDCX loaded and configured from ENV (and optional repo-root .env).
+#
+#   bundle exec bin/console
+#
+# Typical ENV: COINDCX_API_KEY, COINDCX_API_SECRET
+# Optional: COINDCX_API_BASE_URL, COINDCX_PUBLIC_BASE_URL, COINDCX_SOCKET_BASE_URL
+
+require "bundler/setup"
+require_relative "../lib/coindcx"
+
+# Socket.IO delivers events on the WebSocket thread; IRB often delays plain puts until you press Enter.
+$stdout.sync = true
+$stderr.sync = true
+
+root = File.expand_path("..", __dir__)
+env_path = File.join(root, ".env")
+if File.file?(env_path)
+  File.foreach(env_path) do |line|
+    line = line.strip
+    next if line.empty? || line.start_with?("#")
+
+    key, _, value = line.partition("=")
+    next if key.empty?
+
+    ENV[key.strip] = value.strip.gsub(/\A["']|["']\z/, "")
+  end
+  warn "Loaded #{env_path}"
+end
+
+CoinDCX.configure do |config|
+  config.api_key = ENV.fetch("COINDCX_API_KEY", nil)
+  config.api_secret = ENV.fetch("COINDCX_API_SECRET", nil)
+  unless (v = ENV["COINDCX_API_BASE_URL"].to_s.strip).empty?
+    config.api_base_url = v
+  end
+  unless (v = ENV["COINDCX_PUBLIC_BASE_URL"].to_s.strip).empty?
+    config.public_base_url = v
+  end
+  unless (v = ENV["COINDCX_SOCKET_BASE_URL"].to_s.strip).empty?
+    config.socket_base_url = v
+  end
+end
+
+client = CoinDCX.client
+
+warn <<~BANNER
+  CoinDCX ready — locals: client, client.ws, CoinDCX.configuration
+  WebSocket: use warn(...) inside subscribe blocks (not only puts), then client.ws.connect last.
+  Spot smoke (liquid pair):
+    pc = CoinDCX::WS::PublicChannels
+    client.ws.subscribe_public(channel_name: pc.price_stats(pair: "B-BTC_USDT"), event_name: "price-change") { |p| warn(p.inspect) }
+    client.ws.connect
+  If you see a Hash with a "data" key (like the JS docs), print p["data"] || p
+BANNER
+
+binding.irb # rubocop:disable Lint/Debugger -- interactive entry point
