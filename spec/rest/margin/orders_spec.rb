@@ -12,7 +12,7 @@ RSpec.describe CoinDCX::REST::Margin::Orders do
   end
 
   it 'routes margin operations through authenticated transport calls' do
-    resource.create(side: 'buy', quantity: 1)
+    resource.create(side: 'buy', order_type: 'market_order', market: 'SNTBTC', quantity: 1)
     resource.list
     resource.fetch(id: '1')
     resource.cancel(id: '1')
@@ -26,7 +26,7 @@ RSpec.describe CoinDCX::REST::Margin::Orders do
 
     expect(http_client).to have_received(:post).with(
       '/exchange/v1/margin/create',
-      body: { side: 'buy', quantity: 1 },
+      body: { side: 'buy', order_type: 'market_order', market: 'SNTBTC', quantity: 1 },
       auth: true,
       base: :api,
       bucket: :margin_create_order
@@ -71,7 +71,7 @@ RSpec.describe CoinDCX::REST::Margin::Orders do
     context 'when side is invalid' do
       it 'raises a validation error' do
         expect do
-          resource.create(side: 'hold', quantity: 1)
+          resource.create(side: 'hold', order_type: 'market_order', market: 'SNTBTC', quantity: 1)
         end.to raise_error(CoinDCX::Errors::ValidationError, /side/)
       end
     end
@@ -79,7 +79,7 @@ RSpec.describe CoinDCX::REST::Margin::Orders do
     context 'when quantity is not positive' do
       it 'raises a validation error' do
         expect do
-          resource.create(side: 'buy', quantity: 0)
+          resource.create(side: 'buy', order_type: 'market_order', market: 'SNTBTC', quantity: 0)
         end.to raise_error(CoinDCX::Errors::ValidationError, /quantity/)
       end
     end

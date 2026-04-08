@@ -71,7 +71,7 @@ module CoinDCX
         factory = configuration.socket_io_backend_factory
         return Contracts::SocketBackend.validate!(factory.call) if factory
 
-        SocketIOSimpleBackend.new
+        SocketIOSimpleBackend.new(connect_options: configuration.socket_io_connect_options)
       end
     end
   end

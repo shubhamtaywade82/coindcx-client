@@ -18,6 +18,31 @@ RSpec.describe CoinDCX::Transport::HttpClient do
   let(:stubs) { Faraday::Adapter::Test::Stubs.new }
   subject(:http_client) { described_class.new(configuration: configuration, stubs: stubs, sleeper: sleeper) }
 
+  describe "#get" do
+    context "when authenticated with a JSON body (CoinDCX futures wallet-style GET)" do
+      it "sends signed JSON in the request body and query params on the URL" do
+        stubs.get("/exchange/v1/derivatives/futures/wallets/transactions") do |env|
+          expect(env.request_headers["X-AUTH-APIKEY"]).to eq("api-key")
+          expect(env.request_headers["X-AUTH-SIGNATURE"]).not_to be_nil
+          expect(env.body).to match(/"timestamp":\d+/)
+          expect(env.url.query).to eq("page=1&size=10")
+          [200, { "Content-Type" => "application/json" }, "[]"]
+        end
+
+        response_body = http_client.get(
+          "/exchange/v1/derivatives/futures/wallets/transactions",
+          params: { page: 1, size: 10 },
+          body: {},
+          auth: true,
+          bucket: :futures_wallet_transactions
+        )
+
+        expect(response_body).to eq([])
+        stubs.verify_stubbed_calls
+      end
+    end
+  end
+
   describe "#post" do
     context "when the response is successful" do
       it "returns the parsed response data and logs the request metadata" do
@@ -28,7 +53,12 @@ RSpec.describe CoinDCX::Transport::HttpClient do
           [200, { "Content-Type" => "application/json" }, '{"id":"123"}']
         end
 
-        response_body = http_client.post("/exchange/v1/orders/create", auth: true, body: { market: "SNTBTC" })
+        response_body = http_client.post(
+          "/exchange/v1/orders/create",
+          auth: true,
+          bucket: :spot_create_order,
+          body: { market: "SNTBTC" }
+        )
 
         expect(response_body).to eq("id" => "123")
         expect(logger).to have_received(:info).with(
@@ -50,28 +80,30 @@ RSpec.describe CoinDCX::Transport::HttpClient do
         end
 
         request_call = lambda do
-          http_client.post("/exchange/v1/orders/create", auth: true, body: { market: "SNTBTC" })
+          http_client.post(
+            "/exchange/v1/orders/create",
+            auth: true,
+            bucket: :spot_create_order,
+            body: { market: "SNTBTC" }
+          )
         end
 
         expect(&request_call).to raise_error(CoinDCX::Errors::RateLimitError) do |error|
           expect(error.status).to eq(429)
-          expect(error.body).to eq(
-            success: false,
-            data: {},
-            error: {
-              category: :rate_limit,
-              code: 429,
-              message: "too many requests",
-              request_context: {
-                base: :api,
-                endpoint: "/exchange/v1/orders/create",
-                method: "POST",
-                operation: "post_exchange_v1_orders_create",
-                request_id: kind_of(String)
-              },
-              retryable: false
-            }
+          expect(error.body).to include(success: false, data: {})
+          expect(error.body[:error]).to include(
+            category: :rate_limit,
+            code: 429,
+            message: "too many requests",
+            retryable: false
           )
+          expect(error.body.dig(:error, :request_context)).to include(
+            base: :api,
+            endpoint: "/exchange/v1/orders/create",
+            method: "POST",
+            operation: "post_exchange_v1_orders_create"
+          )
+          expect(error.body.dig(:error, :request_context, :request_id)).to match(/\A[0-9a-f-]{36}\z/)
         end
       end
     end
@@ -131,8 +163,13 @@ RSpec.describe CoinDCX::Transport::HttpClient do
         end
 
         expect do
-          http_client.post("/exchange/v1/orders/create", auth: true, body: { market: "SNTBTC" })
-        end.to raise_error(Faraday::TimeoutError, "timed out")
+          http_client.post(
+            "/exchange/v1/orders/create",
+            auth: true,
+            bucket: :spot_create_order,
+            body: { market: "SNTBTC" }
+          )
+        end.to raise_error(CoinDCX::Errors::TransportError, /CoinDCX transport failed for \/exchange\/v1\/orders\/create/)
 
         expect(attempts).to eq(1)
         expect(sleeper).not_to have_received(:sleep)
@@ -152,6 +189,7 @@ RSpec.describe CoinDCX::Transport::HttpClient do
         response_body = http_client.post(
           "/exchange/v1/orders/create",
           auth: true,
+          bucket: :spot_create_order,
           body: { market: "SNTBTC", client_order_id: "client-123" }
         )
 

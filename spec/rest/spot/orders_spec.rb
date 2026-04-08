@@ -53,7 +53,9 @@ RSpec.describe CoinDCX::REST::Spot::Orders do
 
   describe "authenticated routing" do
     it "routes the remaining spot order operations through authenticated transport calls" do
-      resource.create_many(orders: [{ market: "SNTBTC" }])
+      resource.create_many(
+        orders: [{ side: "buy", order_type: "limit_order", market: "SNTBTC", total_quantity: 1, price_per_unit: "0.03244" }]
+      )
       resource.fetch_status(id: "1")
       resource.fetch_statuses(ids: ["1"])
       resource.list_active
@@ -66,7 +68,11 @@ RSpec.describe CoinDCX::REST::Spot::Orders do
 
       expect(http_client).to have_received(:post).with(
         "/exchange/v1/orders/create_multiple",
-        body: { orders: [{ market: "SNTBTC" }] },
+        body: {
+          orders: [
+            { side: "buy", order_type: "limit_order", market: "SNTBTC", total_quantity: 1, price_per_unit: "0.03244" }
+          ]
+        },
         auth: true,
         base: :api,
         bucket: :spot_create_order_multiple

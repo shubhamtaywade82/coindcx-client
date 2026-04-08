@@ -9,6 +9,7 @@ RSpec.describe CoinDCX::REST::Futures::Wallets do
 
   before do
     allow(http_client).to receive(:post).and_return({})
+    allow(http_client).to receive(:get).and_return({})
   end
 
   it 'routes futures wallet operations through authenticated transport calls' do
@@ -23,16 +24,18 @@ RSpec.describe CoinDCX::REST::Futures::Wallets do
       base: :api,
       bucket: :futures_wallet_transfer
     )
-    expect(http_client).to have_received(:post).with(
+    expect(http_client).to have_received(:get).with(
       '/exchange/v1/derivatives/futures/wallets',
+      params: {},
       body: {},
       auth: true,
       base: :api,
       bucket: :futures_wallet_details
     )
-    expect(http_client).to have_received(:post).with(
+    expect(http_client).to have_received(:get).with(
       '/exchange/v1/derivatives/futures/wallets/transactions',
-      body: { page: 1, size: 1000, timestamp: nil },
+      params: { page: 1, size: 1000 },
+      body: {},
       auth: true,
       base: :api,
       bucket: :futures_wallet_transactions

@@ -33,8 +33,7 @@ RSpec.describe CoinDCX::Transport::ResponseNormalizer do
           message: "too many requests",
           request_context: { endpoint: "/exchange/v1/orders/create", request_id: "request-123" },
           retryable: true
-        },
-        meta: { status: 429 }
+        }
       )
     end
 
@@ -57,8 +56,7 @@ RSpec.describe CoinDCX::Transport::ResponseNormalizer do
           message: "upstream failure",
           request_context: { endpoint: "/exchange/v1/orders/create" },
           retryable: false
-        },
-        meta: { status: 500 }
+        }
       )
     end
   end

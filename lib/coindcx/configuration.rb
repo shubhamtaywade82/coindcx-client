@@ -55,7 +55,7 @@ module CoinDCX
     }.freeze
 
     attr_accessor :api_key, :api_secret, :api_base_url, :public_base_url,
-                  :socket_base_url, :open_timeout, :read_timeout, :max_retries,
+                  :socket_base_url, :socket_io_connect_options, :open_timeout, :read_timeout, :max_retries,
                   :retry_base_interval, :user_agent, :socket_io_backend_factory,
                   :endpoint_rate_limits, :logger, :socket_reconnect_attempts,
                   :socket_reconnect_interval, :socket_heartbeat_interval,
@@ -67,6 +67,7 @@ module CoinDCX
       @api_base_url = DEFAULT_API_BASE_URL
       @public_base_url = DEFAULT_PUBLIC_BASE_URL
       @socket_base_url = DEFAULT_SOCKET_BASE_URL
+      @socket_io_connect_options = { EIO: 4 }
       @open_timeout = 5
       @read_timeout = 30
       @max_retries = 2

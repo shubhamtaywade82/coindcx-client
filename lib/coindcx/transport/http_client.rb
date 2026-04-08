@@ -30,8 +30,8 @@ module CoinDCX
 
       attr_reader :configuration
 
-      def get(path, params: {}, auth: false, base: :api, bucket: nil)
-        request(:get, path, params: params, body: {}, auth: auth, base: base, bucket: bucket)
+      def get(path, params: {}, body: {}, auth: false, base: :api, bucket: nil)
+        request(:get, path, params: params, body: body, auth: auth, base: base, bucket: bucket)
       end
 
       def post(path, body: {}, auth: false, base: :api, bucket: nil)

@@ -19,15 +19,23 @@ module CoinDCX
         end
 
         def fetch_details(attributes = {})
-          post("/exchange/v1/derivatives/futures/wallets", auth: true, bucket: :futures_wallet_details, body: attributes)
+          get(
+            "/exchange/v1/derivatives/futures/wallets",
+            body: attributes,
+            auth: true,
+            bucket: :futures_wallet_details
+          )
         end
 
         def list_transactions(page: 1, size: 1000, timestamp: nil)
-          post(
+          body = {}
+          body[:timestamp] = timestamp unless timestamp.nil?
+          get(
             "/exchange/v1/derivatives/futures/wallets/transactions",
+            params: { page: page, size: size },
+            body: body,
             auth: true,
-            bucket: :futures_wallet_transactions,
-            body: { page: page, size: size, timestamp: timestamp }
+            bucket: :futures_wallet_transactions
           )
         end
       end

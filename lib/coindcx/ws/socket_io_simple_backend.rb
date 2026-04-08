@@ -5,12 +5,15 @@ require "socket.io-client-simple"
 module CoinDCX
   module WS
     class SocketIOSimpleBackend
-      def initialize(socket_factory: ::SocketIO::Client::Simple)
+      def initialize(socket_factory: ::SocketIO::Client::Simple, connect_options: nil)
         @socket_factory = socket_factory
+        @connect_options = connect_options || { EIO: 4 }
       end
 
+      # Engine.IO version must match the server (`EIO` query param). CoinDCX commonly expects v4;
+      # override via `CoinDCX::Configuration#socket_io_connect_options` (e.g. `{ EIO: 3 }`).
       def connect(url)
-        @socket = @socket_factory.connect(url)
+        @socket = @socket_factory.connect(url, @connect_options.dup)
       rescue StandardError => e
         raise Errors::SocketConnectionError, e.message
       end
