@@ -15,9 +15,19 @@ RSpec.describe CoinDCX::REST::Transfers::Wallets do
     resource.transfer(source_wallet_type: 'spot', destination_wallet_type: 'futures', currency_short_name: 'USDT', amount: 1)
     resource.sub_account_transfer(from_account_id: 'A', to_account_id: 'B', currency_short_name: 'USDT', amount: 1)
 
-    expect(http_client).to have_received(:post).with('/exchange/v1/wallets/transfer',
-                                                     body: { source_wallet_type: 'spot', destination_wallet_type: 'futures', currency_short_name: 'USDT', amount: 1, timestamp: nil }, auth: true, base: :api, bucket: nil)
-    expect(http_client).to have_received(:post).with('/exchange/v1/wallets/sub_account_transfer',
-                                                     body: { from_account_id: 'A', to_account_id: 'B', currency_short_name: 'USDT', amount: 1, timestamp: nil }, auth: true, base: :api, bucket: nil)
+    expect(http_client).to have_received(:post).with(
+      '/exchange/v1/wallets/transfer',
+      body: { source_wallet_type: 'spot', destination_wallet_type: 'futures', currency_short_name: 'USDT', amount: 1, timestamp: nil },
+      auth: true,
+      base: :api,
+      bucket: :wallets_transfer
+    )
+    expect(http_client).to have_received(:post).with(
+      '/exchange/v1/wallets/sub_account_transfer',
+      body: { from_account_id: 'A', to_account_id: 'B', currency_short_name: 'USDT', amount: 1, timestamp: nil },
+      auth: true,
+      base: :api,
+      bucket: :wallets_sub_account_transfer
+    )
   end
 end

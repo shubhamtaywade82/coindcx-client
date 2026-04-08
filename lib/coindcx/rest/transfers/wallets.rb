@@ -8,6 +8,7 @@ module CoinDCX
           post(
             "/exchange/v1/wallets/transfer",
             auth: true,
+            bucket: :wallets_transfer,
             body: {
               source_wallet_type: source_wallet_type,
               destination_wallet_type: destination_wallet_type,
@@ -22,6 +23,7 @@ module CoinDCX
           post(
             "/exchange/v1/wallets/sub_account_transfer",
             auth: true,
+            bucket: :wallets_sub_account_transfer,
             body: {
               from_account_id: from_account_id,
               to_account_id: to_account_id,

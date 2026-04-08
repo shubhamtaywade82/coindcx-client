@@ -5,13 +5,15 @@ module CoinDCX
     module Spot
       class Orders < BaseResource
         def create(attributes)
-          build_model(Models::Order, post("/exchange/v1/orders/create", auth: true, bucket: :spot_create_order, body: attributes))
+          validated_attributes = Contracts::OrderRequest.validate_spot_create!(attributes)
+          build_model(Models::Order, post("/exchange/v1/orders/create", auth: true, bucket: :spot_create_order, body: validated_attributes))
         end
 
         def create_many(orders:)
+          validated_orders = Contracts::OrderRequest.validate_spot_create_many!(orders)
           build_models(
             Models::Order,
-            post("/exchange/v1/orders/create_multiple", auth: true, bucket: :spot_create_order_multiple, body: { orders: orders })
+            post("/exchange/v1/orders/create_multiple", auth: true, bucket: :spot_create_order_multiple, body: { orders: validated_orders })
           )
         end
 
@@ -34,11 +36,11 @@ module CoinDCX
         end
 
         def count_active(attributes = {})
-          post("/exchange/v1/orders/active_orders_count", auth: true, body: attributes)
+          post("/exchange/v1/orders/active_orders_count", auth: true, bucket: :spot_active_order_count, body: attributes)
         end
 
         def list_trade_history(attributes = {})
-          build_models(Models::Trade, post("/exchange/v1/orders/trade_history", auth: true, body: attributes))
+          build_models(Models::Trade, post("/exchange/v1/orders/trade_history", auth: true, bucket: :spot_trade_history, body: attributes))
         end
 
         def cancel(attributes)

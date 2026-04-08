@@ -16,11 +16,26 @@ RSpec.describe CoinDCX::REST::Futures::Wallets do
     resource.fetch_details
     resource.list_transactions
 
-    expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/wallets/transfer',
-                                                     body: { transfer_type: 'withdraw', amount: 1, currency_short_name: 'USDT', timestamp: nil }, auth: true, base: :api, bucket: nil)
-    expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/wallets', body: {}, auth: true, base: :api,
-                                                                                                 bucket: nil)
-    expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/wallets/transactions',
-                                                     body: { page: 1, size: 1000, timestamp: nil }, auth: true, base: :api, bucket: nil)
+    expect(http_client).to have_received(:post).with(
+      '/exchange/v1/derivatives/futures/wallets/transfer',
+      body: { transfer_type: 'withdraw', amount: 1, currency_short_name: 'USDT', timestamp: nil },
+      auth: true,
+      base: :api,
+      bucket: :futures_wallet_transfer
+    )
+    expect(http_client).to have_received(:post).with(
+      '/exchange/v1/derivatives/futures/wallets',
+      body: {},
+      auth: true,
+      base: :api,
+      bucket: :futures_wallet_details
+    )
+    expect(http_client).to have_received(:post).with(
+      '/exchange/v1/derivatives/futures/wallets/transactions',
+      body: { page: 1, size: 1000, timestamp: nil },
+      auth: true,
+      base: :api,
+      bucket: :futures_wallet_transactions
+    )
   end
 end

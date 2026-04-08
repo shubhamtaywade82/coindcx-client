@@ -25,26 +25,26 @@ RSpec.describe CoinDCX::REST::Futures::Positions do
     resource.update_margin_type(id: '1')
 
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions', body: {}, auth: true, base: :api,
-                                                                                                   bucket: nil)
+                                                                                                   bucket: :futures_positions_list)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/update_leverage', body: { id: '1' },
-                                                                                                                   auth: true, base: :api, bucket: nil)
+                                                                                                                   auth: true, base: :api, bucket: :futures_positions_update_leverage)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/add_margin', body: { id: '1' },
-                                                                                                              auth: true, base: :api, bucket: nil)
+                                                                                                              auth: true, base: :api, bucket: :futures_positions_add_margin)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/remove_margin', body: { id: '1' },
-                                                                                                                 auth: true, base: :api, bucket: nil)
+                                                                                                                 auth: true, base: :api, bucket: :futures_positions_remove_margin)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/cancel_all_open_orders',
-                                                     body: { id: '1' }, auth: true, base: :api, bucket: nil)
+                                                     body: { id: '1' }, auth: true, base: :api, bucket: :futures_positions_cancel_all_open_orders)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/cancel_all_open_orders_for_position',
-                                                     body: { id: '1' }, auth: true, base: :api, bucket: nil)
+                                                     body: { id: '1' }, auth: true, base: :api, bucket: :futures_positions_cancel_all_open_orders_for_position)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/exit', body: { id: '1' }, auth: true,
-                                                                                                        base: :api, bucket: nil)
+                                                                                                        base: :api, bucket: :futures_positions_exit)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/create_tpsl', body: { id: '1' },
-                                                                                                               auth: true, base: :api, bucket: nil)
+                                                                                                               auth: true, base: :api, bucket: :futures_positions_create_tpsl)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/transactions', body: {}, auth: true,
-                                                                                                                base: :api, bucket: nil)
+                                                                                                                base: :api, bucket: :futures_positions_transactions)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/cross_margin_details', body: {},
-                                                                                                                        auth: true, base: :api, bucket: nil)
+                                                                                                                        auth: true, base: :api, bucket: :futures_positions_cross_margin_details)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/margin_type', body: { id: '1' },
-                                                                                                               auth: true, base: :api, bucket: nil)
+                                                                                                               auth: true, base: :api, bucket: :futures_positions_margin_type)
   end
 end

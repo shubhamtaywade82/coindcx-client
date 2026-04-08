@@ -1,10 +1,14 @@
 # frozen_string_literal: true
 
+require "securerandom"
+
 require_relative "coindcx/version"
 require_relative "coindcx/utils/payload"
 require_relative "coindcx/errors/base_error"
 require_relative "coindcx/logging/null_logger"
+require_relative "coindcx/logging/structured_logger"
 require_relative "coindcx/contracts/channel_name"
+require_relative "coindcx/contracts/order_request"
 require_relative "coindcx/contracts/socket_backend"
 require_relative "coindcx/models/base_model"
 
@@ -15,6 +19,7 @@ end
 require_relative "coindcx/auth/signer"
 require_relative "coindcx/transport/rate_limit_registry"
 require_relative "coindcx/transport/retry_policy"
+require_relative "coindcx/transport/response_normalizer"
 require_relative "coindcx/transport/http_client"
 require_relative "coindcx/rest/base_resource"
 
@@ -41,6 +46,10 @@ module CoinDCX
 
     def client
       Client.new(configuration: configuration)
+    end
+
+    def generate_client_order_id
+      SecureRandom.uuid
     end
 
     def reset_configuration!

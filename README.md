@@ -85,7 +85,8 @@ client.spot.orders.create(
   order_type: 'limit_order',
   market: 'SNTBTC',
   price_per_unit: '0.03244',
-  total_quantity: 400
+  total_quantity: 400,
+  client_order_id: SecureRandom.uuid
 )
 
 client.user.accounts.list_balances
@@ -103,7 +104,7 @@ client.futures.orders.list(status: 'open', margin_currency_short_name: ['USDT'])
 
 ## Websocket usage
 
-CoinDCX documents Socket.io for websocket access. This gem keeps that boundary explicit and reconnects using configurable retry settings.
+CoinDCX documents Socket.io for websocket access. This gem keeps that boundary explicit and now tracks connection state, heartbeats, and subscription replay after reconnects.
 
 ```ruby
 client = CoinDCX.client
@@ -114,6 +115,13 @@ client.ws.subscribe_public(channel_name: prices_channel, event_name: 'price-chan
   puts payload
 end
 ```
+
+## Trading safety rules
+
+- Always supply `client_order_id` when placing orders. The gem will not retry order creation without it.
+- Order create requests validate core fields before sending them to CoinDCX.
+- Responses are normalized into `success`, `data`, and `error` keys in the transport layer.
+- WebSocket subscriptions are replayed automatically after reconnect, but downstream business logic should still consume events via an application EventBus.
 
 Private subscriptions use the documented `coindcx` channel signing flow:
 

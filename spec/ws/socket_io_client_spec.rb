@@ -9,6 +9,8 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
       config.api_secret = "api-secret"
       config.socket_reconnect_attempts = 2
       config.socket_reconnect_interval = 0.01
+      config.socket_heartbeat_interval = 0.5
+      config.socket_liveness_timeout = 1.0
     end
   end
 
@@ -23,10 +25,10 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
 
   describe "#subscribe_public" do
     it "rejoins subscriptions after a reconnect event" do
-      connect_callback = nil
+      handlers = {}
       allow(backend).to receive(:connect)
       allow(backend).to receive(:on) do |event_name, &block|
-        connect_callback = block if event_name == :connect
+        handlers[event_name] = block
       end
 
       client = described_class.new(configuration: configuration, backend: backend, sleeper: sleeper)
@@ -35,7 +37,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
 
       expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).once
 
-      connect_callback.call
+      handlers.fetch(:connect).call
 
       expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).twice
     end
@@ -56,6 +58,59 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
 
       expect(backend).to have_received(:connect).twice
       expect(sleeper).to have_received(:sleep).with(0.01)
+    end
+
+    it "reconnects and resubscribes after a disconnect event" do
+      handlers = {}
+      allow(backend).to receive(:connect)
+      allow(backend).to receive(:on) do |event_name, &block|
+        handlers[event_name] = block
+      end
+
+      client = described_class.new(configuration: configuration, backend: backend, sleeper: sleeper)
+      client.connect
+      client.subscribe_public(channel_name: "B-BTC_USDT@prices", event_name: "price-change")
+
+      handlers.fetch(:disconnect).call("network_lost")
+
+      expect(backend).to have_received(:connect).twice
+      expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).at_least(:twice)
+      expect(sleeper).to have_received(:sleep).with(0.01)
+    end
+  end
+
+  describe "heartbeat liveness" do
+    it "reconnects after a stale subscription" do
+      now = 100.0
+      handlers = {}
+      clock = -> { now }
+
+      allow(backend).to receive(:connect)
+      allow(backend).to receive(:on) do |event_name, &block|
+        handlers[event_name] = block
+      end
+
+      threads = []
+      thread_factory = lambda do |&block|
+        threads << block
+        instance_double("Thread")
+      end
+
+      client = described_class.new(
+        configuration: configuration,
+        backend: backend,
+        sleeper: sleeper,
+        thread_factory: thread_factory,
+        monotonic_clock: clock
+      )
+      client.connect
+      client.subscribe_public(channel_name: "B-BTC_USDT@prices", event_name: "price-change")
+
+      now += 2.0
+      threads.first.call
+
+      expect(backend).to have_received(:connect).twice
+      expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).at_least(:twice)
     end
   end
 end
