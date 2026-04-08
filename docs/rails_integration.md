@@ -42,7 +42,8 @@ module Brokers
           order_type: 'limit_order',
           market: market,
           price_per_unit: price_per_unit,
-          total_quantity: total_quantity
+          total_quantity: total_quantity,
+          client_order_id: SecureRandom.uuid
         )
       end
 
@@ -146,3 +147,5 @@ Signal -> Adapter -> CoinDCX -> Order ID -> Track -> WS updates -> Exit
 - Send websocket events into your app event bus
 - Prefer websocket market data over polling when available
 - Keep all strategy and risk logic in Rails, not in the gem
+- Persist `client_order_id` in your Rails app before calling create-order endpoints
+- Treat websocket events as at-least-once delivery and deduplicate in the app if needed

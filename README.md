@@ -1,6 +1,6 @@
 # coindcx-client
 
-`coindcx-client` is a CoinDCX-specific Ruby gem scaffold built from a layered exchange-client architecture rather than a thin wrapper.
+`coindcx-client` is a CoinDCX-specific Ruby client built from a layered exchange-client architecture rather than a thin wrapper.
 
 ## Documentation
 
@@ -15,7 +15,7 @@
 - model CoinDCX namespaces explicitly: public, spot, margin, user, transfers, and futures
 - keep the gem stateless and leave strategy, position tracking, and risk logic to the host app
 - preserve CoinDCX websocket constraints instead of flattening them into a generic websocket abstraction
-- make rate limiting endpoint-aware for documented spot order endpoints
+- enforce endpoint-aware rate limiting at the transport boundary
 - fail with structured errors that trading code can classify cleanly
 
 ## Structure
@@ -62,10 +62,19 @@ CoinDCX.configure do |config|
   # HTTP retry tuning
   config.max_retries = 2
   config.retry_base_interval = 0.25
+  config.market_data_retry_budget = 2
+  config.private_read_retry_budget = 1
+  config.idempotent_order_retry_budget = 1
 
   # Socket reconnect tuning
-  config.socket_reconnect_attempts = 3
+  config.socket_reconnect_attempts = 5
   config.socket_reconnect_interval = 1.0
+  config.socket_heartbeat_interval = 10.0
+  config.socket_liveness_timeout = 60.0
+
+  # Critical order-endpoint protection
+  config.circuit_breaker_threshold = 3
+  config.circuit_breaker_cooldown = 30.0
 end
 ```
 
@@ -104,7 +113,7 @@ client.futures.orders.list(status: 'open', margin_currency_short_name: ['USDT'])
 
 ## Websocket usage
 
-CoinDCX documents Socket.io for websocket access. This gem keeps that boundary explicit and now tracks connection state, heartbeats, and subscription replay after reconnects.
+CoinDCX documents Socket.io for websocket access. This gem keeps that boundary explicit and now tracks connection state, heartbeat liveness, private auth renewal, and subscription replay after reconnects.
 
 ```ruby
 client = CoinDCX.client
@@ -118,10 +127,12 @@ end
 
 ## Trading safety rules
 
-- Always supply `client_order_id` when placing orders. The gem will not retry order creation without it.
-- Order create requests validate core fields before sending them to CoinDCX.
-- Responses are normalized into `success`, `data`, and `error` keys in the transport layer.
-- WebSocket subscriptions are replayed automatically after reconnect, but downstream business logic should still consume events via an application EventBus.
+- Always supply `client_order_id` when placing orders. The gem will not retry mutable order creation without it.
+- Persist `client_order_id` in your host application so a timeout can be reconciled safely.
+- Order create and transfer requests validate required fields before sending them to CoinDCX.
+- WebSocket subscriptions are replayed automatically after reconnect, and private subscriptions rebuild auth payloads on every reconnect.
+- WebSocket delivery is `at_least_once`. Consumers must tolerate duplicates after reconnect.
+- The gem does not guarantee lossless recovery of events missed while CoinDCX was disconnected.
 
 Private subscriptions use the documented `coindcx` channel signing flow:
 
@@ -133,16 +144,29 @@ end
 
 ## Error handling
 
-The transport raises structured errors so calling code can respond intentionally:
+The transport raises structured errors so calling code can branch intentionally without parsing strings:
 
 - `CoinDCX::Errors::AuthError`
 - `CoinDCX::Errors::RateLimitError`
+- `CoinDCX::Errors::RetryableRateLimitError`
+- `CoinDCX::Errors::RemoteValidationError`
+- `CoinDCX::Errors::UpstreamServerError`
+- `CoinDCX::Errors::TransportError`
+- `CoinDCX::Errors::CircuitOpenError`
 - `CoinDCX::Errors::RequestError`
 - `CoinDCX::Errors::SocketConnectionError`
+- `CoinDCX::Errors::SocketAuthenticationError`
+- `CoinDCX::Errors::SocketStateError`
+
+Every API error exposes normalized metadata through `status`, `category`, `code`, `request_context`, and `retryable`.
 
 ## Rate limiting
 
-`CoinDCX::Configuration` ships with the documented spot order limits as named buckets:
+`CoinDCX::Configuration` ships with named buckets for authenticated endpoint families and enforces them before the request is sent.
+
+Read and write paths are separated so market data traffic does not consume order-placement capacity. Private endpoints require an explicit bucket definition.
+
+Spot order buckets include:
 
 - `spot_create_order_multiple`
 - `spot_create_order`
@@ -152,9 +176,11 @@ The transport raises structured errors so calling code can respond intentionally
 - `spot_cancel_multiple_by_id`
 - `spot_cancel_order`
 - `spot_active_order`
+- `spot_active_order_count`
+- `spot_trade_history`
 - `spot_edit_price`
 
-Unknown endpoints are intentionally left unbucketed until their limits are confirmed.
+Additional private endpoint families ship with conservative defaults until exchange-specific limits are confirmed.
 
 ## Stateless boundary
 
@@ -172,6 +198,8 @@ This gem intentionally does **not** own:
 - strategy logic
 - risk management
 - application caching
+- persistence of idempotency keys
+- reconciliation of missed websocket events after downtime
 
 ## Notes
 
@@ -179,3 +207,4 @@ This gem intentionally does **not** own:
 - futures market data lives under `rest/futures`, even when it uses public hosts
 - websocket order book parsing is snapshot-oriented and preserves CoinDCX's "up to 50 recent orders" constraint
 - the websocket layer uses Socket.io and does not masquerade as a plain websocket client
+- release tags are expected to be immutable once published

@@ -55,7 +55,8 @@ module CoinDCX
           type: type,
           channel_name: channel_name,
           event_name: event_name,
-          payload: join_payload(type: type, channel_name: channel_name)
+          payload_builder: -> { join_payload(type: type, channel_name: channel_name) },
+          delivery_mode: :at_least_once
         )
         self
       end

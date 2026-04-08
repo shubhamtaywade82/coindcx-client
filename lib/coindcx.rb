@@ -8,7 +8,9 @@ require_relative "coindcx/errors/base_error"
 require_relative "coindcx/logging/null_logger"
 require_relative "coindcx/logging/structured_logger"
 require_relative "coindcx/contracts/channel_name"
+require_relative "coindcx/contracts/identifiers"
 require_relative "coindcx/contracts/order_request"
+require_relative "coindcx/contracts/wallet_transfer_request"
 require_relative "coindcx/contracts/socket_backend"
 require_relative "coindcx/models/base_model"
 
@@ -17,7 +19,9 @@ Dir[File.join(__dir__, "coindcx/models/*.rb")].each do |file|
 end
 
 require_relative "coindcx/auth/signer"
+require_relative "coindcx/transport/circuit_breaker"
 require_relative "coindcx/transport/rate_limit_registry"
+require_relative "coindcx/transport/request_policy"
 require_relative "coindcx/transport/retry_policy"
 require_relative "coindcx/transport/response_normalizer"
 require_relative "coindcx/transport/http_client"

@@ -23,17 +23,17 @@ module CoinDCX
       futures_create_order: DEFAULT_PRIVATE_RATE_LIMIT,
       futures_cancel_order: DEFAULT_PRIVATE_RATE_LIMIT,
       futures_edit_order: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_list_positions: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_update_leverage: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_add_position_margin: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_remove_position_margin: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_cancel_all_open_orders: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_cancel_open_orders_for_position: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_exit_position: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_create_tpsl: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_position_transactions: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_cross_margin_details: DEFAULT_PRIVATE_RATE_LIMIT,
-      futures_update_margin_type: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_list: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_update_leverage: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_add_margin: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_remove_margin: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_cancel_all_open_orders: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_cancel_all_open_orders_for_position: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_exit: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_create_tpsl: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_transactions: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_cross_margin_details: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_positions_margin_type: DEFAULT_PRIVATE_RATE_LIMIT,
       futures_wallet_transfer: DEFAULT_PRIVATE_RATE_LIMIT,
       futures_wallet_details: DEFAULT_PRIVATE_RATE_LIMIT,
       futures_wallet_transactions: DEFAULT_PRIVATE_RATE_LIMIT,
@@ -48,10 +48,10 @@ module CoinDCX
       margin_edit_target_order_price: DEFAULT_PRIVATE_RATE_LIMIT,
       margin_add_margin: DEFAULT_PRIVATE_RATE_LIMIT,
       margin_remove_margin: DEFAULT_PRIVATE_RATE_LIMIT,
-      user_list_balances: DEFAULT_PRIVATE_RATE_LIMIT,
-      user_fetch_info: DEFAULT_PRIVATE_RATE_LIMIT,
-      wallet_transfer: DEFAULT_PRIVATE_RATE_LIMIT,
-      wallet_sub_account_transfer: DEFAULT_PRIVATE_RATE_LIMIT
+      user_balances: DEFAULT_PRIVATE_RATE_LIMIT,
+      user_info: DEFAULT_PRIVATE_RATE_LIMIT,
+      wallets_transfer: DEFAULT_PRIVATE_RATE_LIMIT,
+      wallets_sub_account_transfer: DEFAULT_PRIVATE_RATE_LIMIT
     }.freeze
 
     attr_accessor :api_key, :api_secret, :api_base_url, :public_base_url,
@@ -59,7 +59,9 @@ module CoinDCX
                   :retry_base_interval, :user_agent, :socket_io_backend_factory,
                   :endpoint_rate_limits, :logger, :socket_reconnect_attempts,
                   :socket_reconnect_interval, :socket_heartbeat_interval,
-                  :socket_liveness_timeout
+                  :socket_liveness_timeout, :market_data_retry_budget,
+                  :private_read_retry_budget, :idempotent_order_retry_budget,
+                  :circuit_breaker_threshold, :circuit_breaker_cooldown
 
     def initialize
       @api_base_url = DEFAULT_API_BASE_URL
@@ -76,6 +78,11 @@ module CoinDCX
       @socket_reconnect_interval = 1.0
       @socket_heartbeat_interval = 10.0
       @socket_liveness_timeout = 60.0
+      @market_data_retry_budget = 2
+      @private_read_retry_budget = 1
+      @idempotent_order_retry_budget = 1
+      @circuit_breaker_threshold = 3
+      @circuit_breaker_cooldown = 30.0
     end
 
     def rate_limit_for(bucket_name)

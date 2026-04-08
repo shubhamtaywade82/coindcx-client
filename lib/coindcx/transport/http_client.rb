@@ -7,33 +7,7 @@ require "securerandom"
 module CoinDCX
   module Transport
     class HttpClient
-      READ_ONLY_POST_PATHS = [
-        "/exchange/v1/orders/status",
-        "/exchange/v1/orders/status_multiple",
-        "/exchange/v1/orders/active_orders",
-        "/exchange/v1/orders/active_orders_count",
-        "/exchange/v1/orders/trade_history",
-        "/exchange/v1/margin/fetch_orders",
-        "/exchange/v1/margin/order",
-        "/exchange/v1/users/balances",
-        "/exchange/v1/users/info",
-        "/exchange/v1/derivatives/futures/orders",
-        "/exchange/v1/derivatives/futures/positions",
-        "/exchange/v1/derivatives/futures/positions/transactions",
-        "/exchange/v1/derivatives/futures/positions/cross_margin_details",
-        "/exchange/v1/derivatives/futures/wallets"
-      ].freeze
-
-      NON_IDEMPOTENT_ORDER_PATHS = [
-        "/exchange/v1/orders/create",
-        "/exchange/v1/orders/create_multiple",
-        "/exchange/v1/derivatives/futures/orders/create",
-        "/exchange/v1/margin/create"
-      ].freeze
-
-      IDEMPOTENCY_KEYS = %w[client_order_id clientOrderId].freeze
-
-      def initialize(configuration:, stubs: nil, sleeper: Kernel)
+      def initialize(configuration:, stubs: nil, sleeper: Kernel, monotonic_clock: nil)
         @configuration = configuration
         @rate_limits = RateLimitRegistry.new(configuration.endpoint_rate_limits)
         @logger = configuration.logger || Logging::NullLogger.new
@@ -42,6 +16,11 @@ module CoinDCX
           base_interval: configuration.retry_base_interval,
           logger: @logger,
           sleeper: sleeper
+        )
+        @circuit_breaker = CircuitBreaker.new(
+          threshold: configuration.circuit_breaker_threshold,
+          cooldown: configuration.circuit_breaker_cooldown,
+          monotonic_clock: monotonic_clock
         )
         @connections = {
           api: build_connection(configuration.api_base_url, stubs),
@@ -65,55 +44,76 @@ module CoinDCX
 
       private
 
-      attr_reader :logger, :rate_limits, :retry_policy
+      attr_reader :logger, :rate_limits, :retry_policy, :circuit_breaker
 
       def request(method, path, params:, body:, auth:, base:, bucket:)
+        policy = RequestPolicy.build(
+          configuration: configuration,
+          method: method,
+          path: path,
+          body: body,
+          auth: auth,
+          bucket: bucket
+        )
         request_id = SecureRandom.uuid
         started_at = monotonic_time
         retries = 0
+        response_status = nil
+        context = request_context(
+          method: method,
+          path: path,
+          base: base,
+          request_id: request_id,
+          operation_name: policy.operation_name
+        )
 
-        rate_limits.throttle(bucket, required: !bucket.nil?)
+        rate_limits.throttle(policy.bucket, required: auth)
 
-        normalized_response = retry_policy.with_retries(
-          request_context(method: method, path: path, base: base, request_id: request_id),
-          retryable: retryable_request?(method: method, path: path, body: body)
-        ) do |attempts|
-          retries = attempts - 1
-          response = connection_for(base).public_send(method, path) do |request|
-            request.headers["Accept"] = "application/json"
-            request.headers["User-Agent"] = configuration.user_agent
-            request.options.timeout = configuration.read_timeout
-            request.options.open_timeout = configuration.open_timeout
-            apply_payload(request, method: method, params: params, body: body, auth: auth)
+        normalized_response = circuit_breaker.guard(policy.circuit_breaker_key, request_context: context) do
+          retry_policy.with_retries(context, policy: policy) do |attempts|
+            retries = attempts - 1
+            response = connection_for(base).public_send(method, path) do |request|
+              request.headers["Accept"] = "application/json"
+              request.headers["User-Agent"] = configuration.user_agent
+              request.options.timeout = configuration.read_timeout
+              request.options.open_timeout = configuration.open_timeout
+              apply_payload(request, method: method, params: params, body: body, auth: auth)
+            end
+
+            response_status = response.status.to_i
+            parse_response(
+              response,
+              path,
+              request_context: context,
+              policy: policy
+            )
           end
-
-          parse_response(response, path)
         end
 
-        log(:info, event: "api_call", endpoint: path, request_id: request_id, latency: elapsed_since(started_at), retries: retries)
+        log(
+          :info,
+          event: "api_call",
+          endpoint: path,
+          operation: policy.operation_name,
+          request_id: request_id,
+          latency: elapsed_since(started_at),
+          retries: retries,
+          response_status: response_status
+        )
         normalized_response.fetch(:data)
       rescue Errors::ApiError => e
         log(
           :error,
           event: "api_call_failed",
           endpoint: path,
+          operation: policy.operation_name,
           request_id: request_id,
           latency: elapsed_since(started_at),
           retries: retries,
+          response_status: e.status,
+          category: e.category,
           error_code: normalized_error_code(e.body),
           error_message: normalized_error_message(e.body)
-        )
-        raise
-      rescue Faraday::TimeoutError, Faraday::ConnectionFailed => e
-        log(
-          :error,
-          event: "api_transport_failed",
-          endpoint: path,
-          request_id: request_id,
-          latency: elapsed_since(started_at),
-          retries: retries,
-          error_code: e.class.name,
-          error_message: e.message
         )
         raise
       end
@@ -140,21 +140,42 @@ module CoinDCX
         normalized_body
       end
 
-      def parse_response(response, path)
+      def parse_response(response, path, request_context:, policy:)
         parsed_body = parse_body(response.body)
         status = response.status.to_i
         return ResponseNormalizer.success(parsed_body) if status.between?(200, 299)
 
-        raise classify_error(status, path, parsed_body)
+        raise classify_error(
+          status,
+          path,
+          parsed_body,
+          headers: response.headers,
+          request_context: request_context,
+          policy: policy
+        )
       end
 
-      def classify_error(status, path, body)
+      def classify_error(status, path, body, headers:, request_context:, policy:)
         message = "CoinDCX request failed for #{path}"
-        normalized_body = ResponseNormalizer.failure(status: status, body: body, fallback_message: message)
-        return Errors::AuthError.new(message, status: status, body: normalized_body) if status == 401
-        return Errors::RateLimitError.new(message, status: status, body: normalized_body) if status == 429
-
-        Errors::RequestError.new(message, status: status, body: normalized_body)
+        error_class, category, retryable = error_details_for(status: status, headers: headers, policy: policy)
+        normalized_body = ResponseNormalizer.failure(
+          status: status,
+          body: body,
+          fallback_message: message,
+          category: category,
+          request_context: request_context,
+          retryable: retryable
+        )
+        error_class.new(
+          message,
+          status: status,
+          body: normalized_body,
+          category: category,
+          code: normalized_body.dig(:error, :code),
+          request_context: request_context,
+          retryable: retryable,
+          retry_after: policy.retry_after(headers)
+        )
       end
 
       def parse_body(body)
@@ -171,33 +192,13 @@ module CoinDCX
         end
       end
 
-      def retryable_request?(method:, path:, body:)
-        return true if method == :get || method == :delete
-        return true if READ_ONLY_POST_PATHS.include?(path)
-        return true if NON_IDEMPOTENT_ORDER_PATHS.include?(path) && idempotency_key_present?(body)
-
-        false
-      end
-
-      def idempotency_key_present?(body)
-        case body
-        when Hash
-          body.any? do |key, value|
-            IDEMPOTENCY_KEYS.include?(key.to_s) || idempotency_key_present?(value)
-          end
-        when Array
-          body.any? { |value| idempotency_key_present?(value) }
-        else
-          false
-        end
-      end
-
-      def request_context(method:, path:, base:, request_id:)
+      def request_context(method:, path:, base:, request_id:, operation_name:)
         {
           endpoint: path,
           request_id: request_id,
           method: method.to_s.upcase,
-          base: base
+          base: base,
+          operation: operation_name
         }
       end
 
@@ -212,6 +213,16 @@ module CoinDCX
         return body.to_s unless body.respond_to?(:dig)
 
         body.dig(:error, :message)
+      end
+
+      def error_details_for(status:, headers:, policy:)
+        return [Errors::AuthError, :auth, false] if status == 401
+        return [Errors::RetryableRateLimitError, :rate_limit, true] if status == 429 && policy.retryable_response?(status: status, headers: headers)
+        return [Errors::RateLimitError, :rate_limit, false] if status == 429
+        return [Errors::UpstreamServerError, :upstream, policy.retryable_response?(status: status, headers: headers)] if status >= 500
+        return [Errors::RemoteValidationError, :validation, false] if policy.validation_status?(status)
+
+        [Errors::RequestError, :request, false]
       end
 
       def connection_for(base)

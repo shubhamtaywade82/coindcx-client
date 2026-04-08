@@ -16,6 +16,9 @@ CoinDCX.configure do |config|
   config.api_key = ENV.fetch('COINDCX_API_KEY')
   config.api_secret = ENV.fetch('COINDCX_API_SECRET')
   config.logger = Logger.new($stdout)
+  config.socket_reconnect_attempts = 5
+  config.socket_heartbeat_interval = 10.0
+  config.socket_liveness_timeout = 60.0
 end
 
 client = CoinDCX.client
@@ -88,12 +91,15 @@ class ExecuteTrade
   end
 
   def call(price:)
+    client_order_id = SecureRandom.uuid
+
     @client.spot.orders.create(
       side: 'buy',
       order_type: 'limit_order',
       market: 'SNTBTC',
       price_per_unit: price.to_s,
-      total_quantity: 1
+      total_quantity: 1,
+      client_order_id: client_order_id
     )
   end
 end
@@ -130,10 +136,18 @@ Your bot loop should explicitly handle:
 
 - websocket reconnects
 - duplicate ticks
-- order failures and retries at the application layer
+- order failures after the gem exhausts its bounded retry policy
 - stale data timeouts
 
-The gem will reconnect sockets and normalize transport errors, but your bot still owns strategy-safe recovery.
+The gem delivers websocket subscriptions with at-least-once semantics after reconnect. Treat duplicate ticks as normal and de-duplicate at your event boundary when your strategy needs exactly-once behavior.
+
+The gem will reconnect sockets, renew private-channel auth, enforce endpoint throttles, and normalize transport errors, but your bot still owns strategy-safe recovery.
+
+Operator intervention is still required when:
+
+- the websocket reaches the `failed` state after bounded reconnect attempts
+- the order circuit breaker opens on repeated create-order failures
+- upstream validation errors indicate your request contract is wrong
 
 ## 8. Minimal Loop
 

@@ -5,17 +5,18 @@ module CoinDCX
     module Transfers
       class Wallets < BaseResource
         def transfer(source_wallet_type:, destination_wallet_type:, currency_short_name:, amount:, timestamp: nil)
+          validated_attributes = Contracts::WalletTransferRequest.validate_transfer!(
+            source_wallet_type: source_wallet_type,
+            destination_wallet_type: destination_wallet_type,
+            currency_short_name: currency_short_name,
+            amount: amount,
+            timestamp: timestamp
+          )
           post(
             "/exchange/v1/wallets/transfer",
             auth: true,
             bucket: :wallets_transfer,
-            body: {
-              source_wallet_type: source_wallet_type,
-              destination_wallet_type: destination_wallet_type,
-              currency_short_name: currency_short_name,
-              amount: amount,
-              timestamp: timestamp
-            }
+            body: validated_attributes
           )
         end
 

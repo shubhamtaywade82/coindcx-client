@@ -43,6 +43,47 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
     end
   end
 
+  describe "#subscribe_private" do
+    it "renews private channel auth payloads after reconnect" do
+      handlers = {}
+      allow(backend).to receive(:connect)
+      allow(backend).to receive(:on) do |event_name, &block|
+        handlers[event_name] = block
+      end
+
+      client = described_class.new(configuration: configuration, backend: backend, sleeper: sleeper)
+      client.connect
+      client.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT)
+
+      first_payload = nil
+      second_payload = nil
+
+      expect(backend).to have_received(:emit).with("join", kind_of(Hash)).once
+      first_payload = RSpec::Mocks.space.proxy_for(backend).messages_arg_list
+        .select { |args| args.first == "join" }
+        .first
+        .last
+
+      allow(client).to receive(:join_payload).and_call_original
+      allow(client).to receive(:join_payload)
+        .with(type: :private, channel_name: CoinDCX::WS::PrivateChannels::DEFAULT_CHANNEL_NAME)
+        .and_wrap_original do |original, *args, **kwargs|
+          payload = original.call(*args, **kwargs)
+          payload.merge("authSignature" => "#{payload.fetch('authSignature')}-renewed")
+        end
+
+      handlers.fetch(:disconnect).call("network_lost")
+
+      join_payloads = RSpec::Mocks.space.proxy_for(backend).messages_arg_list
+        .select { |args| args.first == "join" }
+        .map(&:last)
+      second_payload = join_payloads.last
+
+      expect(second_payload).not_to eq(first_payload)
+      expect(second_payload.fetch("authSignature")).to end_with("-renewed")
+    end
+  end
+
   describe "#connect" do
     it "retries socket connection failures with backoff" do
       allow(backend).to receive(:connect) do

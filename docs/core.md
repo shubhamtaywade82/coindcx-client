@@ -5,6 +5,7 @@
 ```ruby
 require 'logger'
 require 'coindcx'
+require 'securerandom'
 
 CoinDCX.configure do |config|
   config.api_key = ENV.fetch('COINDCX_API_KEY')
@@ -14,6 +15,8 @@ CoinDCX.configure do |config|
   config.retry_base_interval = 0.25
   config.socket_reconnect_attempts = 3
   config.socket_reconnect_interval = 1.0
+  config.socket_heartbeat_interval = 10.0
+  config.socket_liveness_timeout = 60.0
 end
 
 client = CoinDCX.client
@@ -40,7 +43,8 @@ order = client.spot.orders.create(
   order_type: 'limit_order',
   market: 'SNTBTC',
   price_per_unit: '0.03244',
-  total_quantity: 400
+  total_quantity: 400,
+  client_order_id: SecureRandom.uuid
 )
 ```
 
@@ -95,6 +99,19 @@ ws.subscribe_public(channel_name: channel, event_name: 'price-change') do |data|
 end
 ```
 
+The websocket client guarantees:
+
+- bounded reconnect attempts with exponential backoff
+- liveness checks for quiet streams
+- automatic replay of subscription intent after reconnect
+- at-least-once event delivery semantics after reconnect
+
+The websocket client does **not** guarantee:
+
+- gap-free market data during disconnect windows
+- exactly-once event delivery
+- application-level deduplication
+
 ### Private stream usage
 
 ```ruby
@@ -114,16 +131,29 @@ begin
     order_type: 'limit_order',
     market: 'SNTBTC',
     price_per_unit: '0.03244',
-    total_quantity: 400
+    total_quantity: 400,
+    client_order_id: SecureRandom.uuid
   )
 rescue CoinDCX::Errors::AuthError => e
   warn("authentication failed: #{e.message}")
 rescue CoinDCX::Errors::RateLimitError => e
   warn("rate limited: #{e.message}")
+rescue CoinDCX::Errors::RetryableRateLimitError => e
+  warn("rate limited, retryable: #{e.retryable}")
+rescue CoinDCX::Errors::UpstreamServerError => e
+  warn("upstream failure: #{e.body[:error][:category]}")
 rescue CoinDCX::Errors::RequestError => e
   warn("request failed: #{e.message}")
 end
 ```
+
+Every raised API error exposes:
+
+- `category`
+- `code`
+- `retryable`
+- `request_context`
+- normalized `body[:error]`
 
 ## 7. Critical Rules
 

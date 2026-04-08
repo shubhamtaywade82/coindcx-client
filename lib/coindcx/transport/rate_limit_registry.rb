@@ -29,7 +29,11 @@ module CoinDCX
       private
 
       def definition_for(bucket_name, required:)
-        return if bucket_name.nil?
+        if bucket_name.nil?
+          return nil unless required
+
+          raise Errors::ConfigurationError, "missing rate limit definition for authenticated request"
+        end
 
         definition = @definitions[bucket_name.to_sym]
         return definition unless definition.nil?

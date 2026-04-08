@@ -37,21 +37,72 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
     allow(backend).to receive(:disconnect)
   end
 
-  it "reconnects and resubscribes when heartbeat liveness goes stale" do
-    manager.connect
-    manager.subscribe(
-      type: :public,
-      channel_name: "B-BTC_USDT@prices",
-      event_name: "price-change",
-      payload: { "channelName" => "B-BTC_USDT@prices" }
-    )
+  describe "subscription recovery" do
+    it "reconnects and resubscribes when heartbeat liveness goes stale" do
+      manager.connect
+      manager.subscribe(
+        type: :public,
+        channel_name: "B-BTC_USDT@prices",
+        event_name: "price-change",
+        payload_builder: -> { { "channelName" => "B-BTC_USDT@prices" } },
+        delivery_mode: :at_least_once
+      )
 
-    now[:value] += 2.0
+      now[:value] += 2.0
 
-    manager.send(:check_liveness!)
+      manager.send(:check_liveness!)
 
-    expect(backend).to have_received(:disconnect).once
-    expect(backend).to have_received(:connect).twice
-    expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).twice
+      expect(backend).to have_received(:disconnect).once
+      expect(backend).to have_received(:connect).twice
+      expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).twice
+    end
+
+    it "rebuilds private subscription auth payloads after reconnect" do
+      payload_sequence = [
+        { "channelName" => "coindcx", "authSignature" => "first", "apiKey" => "api-key" },
+        { "channelName" => "coindcx", "authSignature" => "second", "apiKey" => "api-key" }
+      ]
+
+      manager.connect
+      manager.subscribe(
+        type: :private,
+        channel_name: "coindcx",
+        event_name: "order-update",
+        payload_builder: -> { payload_sequence.shift },
+        delivery_mode: :at_least_once
+      )
+
+      now[:value] += 2.0
+
+      manager.send(:check_liveness!)
+
+      expect(backend).to have_received(:emit).with(
+        "join",
+        { "channelName" => "coindcx", "authSignature" => "first", "apiKey" => "api-key" }
+      ).once
+      expect(backend).to have_received(:emit).with(
+        "join",
+        { "channelName" => "coindcx", "authSignature" => "second", "apiKey" => "api-key" }
+      ).once
+    end
+  end
+
+  describe "#alive?" do
+    it "reports false after the liveness timeout elapses" do
+      manager.connect
+      manager.subscribe(
+        type: :public,
+        channel_name: "B-BTC_USDT@prices",
+        event_name: "price-change",
+        payload_builder: -> { { "channelName" => "B-BTC_USDT@prices" } },
+        delivery_mode: :at_least_once
+      )
+
+      expect(manager.alive?).to be(true)
+
+      now[:value] += 2.0
+
+      expect(manager.alive?).to be(false)
+    end
   end
 end

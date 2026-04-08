@@ -18,16 +18,23 @@ RSpec.describe CoinDCX::Transport::ResponseNormalizer do
       normalized_error = described_class.failure(
         status: 429,
         body: { "message" => "too many requests", "code" => "rate_limit" },
-        fallback_message: "request failed"
+        fallback_message: "request failed",
+        category: :rate_limit,
+        request_context: { endpoint: "/exchange/v1/orders/create", request_id: "request-123" },
+        retryable: true
       )
 
       expect(normalized_error).to eq(
         success: false,
         data: {},
         error: {
+          category: :rate_limit,
           code: "rate_limit",
-          message: "too many requests"
-        }
+          message: "too many requests",
+          request_context: { endpoint: "/exchange/v1/orders/create", request_id: "request-123" },
+          retryable: true
+        },
+        meta: { status: 429 }
       )
     end
 
@@ -35,16 +42,23 @@ RSpec.describe CoinDCX::Transport::ResponseNormalizer do
       normalized_error = described_class.failure(
         status: 500,
         body: "upstream failure",
-        fallback_message: "request failed"
+        fallback_message: "request failed",
+        category: :upstream,
+        request_context: { endpoint: "/exchange/v1/orders/create" },
+        retryable: false
       )
 
       expect(normalized_error).to eq(
         success: false,
         data: {},
         error: {
+          category: :upstream,
           code: 500,
-          message: "upstream failure"
-        }
+          message: "upstream failure",
+          request_context: { endpoint: "/exchange/v1/orders/create" },
+          retryable: false
+        },
+        meta: { status: 500 }
       )
     end
   end

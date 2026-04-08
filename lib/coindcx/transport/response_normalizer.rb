@@ -13,15 +13,18 @@
          }
        end
 
-       def failure(status:, body:, fallback_message:)
+      def failure(status:, body:, fallback_message:, category:, request_context:, retryable:)
          normalized_body = normalize_body(body)
 
          {
            success: false,
            data: {},
            error: {
+            category: category,
              code: normalized_body[:code] || status,
-             message: normalized_body[:message] || normalized_body[:error] || fallback_message
+            message: normalized_body[:message] || normalized_body[:error] || fallback_message,
+            request_context: request_context,
+            retryable: retryable
            }
          }
        end

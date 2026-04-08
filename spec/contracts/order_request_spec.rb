@@ -42,6 +42,17 @@ RSpec.describe CoinDCX::Contracts::OrderRequest do
         )
       end.to raise_error(CoinDCX::Errors::ValidationError, /total_quantity/)
     end
+
+    it "rejects invalid market symbols" do
+      expect do
+        described_class.validate_spot_create!(
+          side: "buy",
+          order_type: "limit_order",
+          market: "btc-usdt",
+          total_quantity: 1
+        )
+      end.to raise_error(CoinDCX::Errors::ValidationError, /market/)
+    end
   end
 
   describe ".validate_futures_create!" do
@@ -54,6 +65,16 @@ RSpec.describe CoinDCX::Contracts::OrderRequest do
       )
 
       expect(order).to include(side: "sell", pair: "B-BTC_USDT", quantity: 1)
+    end
+
+    it "rejects malformed pair identifiers" do
+      expect do
+        described_class.validate_futures_create!(
+          side: "sell",
+          pair: "BTCUSDT",
+          quantity: 1
+        )
+      end.to raise_error(CoinDCX::Errors::ValidationError, /pair/)
     end
   end
 
