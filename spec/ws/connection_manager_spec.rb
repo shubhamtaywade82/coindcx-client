@@ -17,7 +17,7 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
   let(:sleeper) { class_double(Kernel, sleep: nil) }
   let(:now) { { value: 100.0 } }
   let(:clock) { -> { now.fetch(:value) } }
-  let(:thread_factory) { ->(&_) { nil } }
+  let(:thread_factory) { ->(&_) {} }
 
   subject(:manager) do
     described_class.new(
@@ -129,7 +129,7 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
 
     it "runs disconnect without NameError when the block executes with the socket as self" do
       manager.connect
-      manager.define_singleton_method(:reconnect) {}
+      manager.define_singleton_method(:reconnect) { nil }
 
       disconnect_block = captured_listeners[:disconnect]
       expect(disconnect_block).to be_a(Proc)

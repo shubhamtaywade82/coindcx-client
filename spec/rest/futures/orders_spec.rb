@@ -24,6 +24,34 @@ RSpec.describe CoinDCX::REST::Futures::Orders do
       )
     end
 
+    it "accepts total_quantity for bot-style market orders" do
+      resource.create(
+        order: {
+          side: "buy",
+          pair: "B-SOL_USDT",
+          total_quantity: "0.05",
+          order_type: "market_order",
+          leverage: 2
+        }
+      )
+
+      expect(http_client).to have_received(:post).with(
+        "/exchange/v1/derivatives/futures/orders/create",
+        body: {
+          order: {
+            side: "buy",
+            pair: "B-SOL_USDT",
+            total_quantity: "0.05",
+            order_type: "market_order",
+            leverage: 2
+          }
+        },
+        auth: true,
+        base: :api,
+        bucket: :futures_create_order
+      )
+    end
+
     it "rejects an invalid side" do
       expect do
         resource.create(order: { side: "wait", quantity: 2 })

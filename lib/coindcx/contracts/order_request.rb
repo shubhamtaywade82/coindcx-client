@@ -1,4 +1,4 @@
- # frozen_string_literal: true
+# frozen_string_literal: true
 
 module CoinDCX
   module Contracts
@@ -27,7 +27,7 @@ module CoinDCX
         validate_side!(attributes)
         validate_pair!(attributes, :pair) if present?(attributes, :pair)
         validate_pair!(attributes, :instrument) if present?(attributes, :instrument)
-        validate_positive_quantity!(attributes, :quantity, :size)
+        validate_positive_quantity!(attributes, :quantity, :size, :total_quantity)
         attributes
       end
 

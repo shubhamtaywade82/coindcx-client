@@ -17,7 +17,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
   let(:backend) { instance_double("SocketBackend") }
   let(:sleeper) { class_double(Kernel, sleep: nil) }
   # Stubbed sleeper.sleep returns immediately; a real heartbeat Thread would tight-loop on the GVL and
-  # starve examples. Capture the loop body unless a test explicitly runs it (see heartbeat liveness).
+  # starve examples. Capture the loop body; drive liveness via ConnectionManager#check_liveness! in specs.
   let(:captured_heartbeat_blocks) { [] }
   let(:thread_factory_without_run) do
     lambda do |&block|
@@ -107,24 +107,20 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         handlers[event_name] = block
       end
 
-      threads = []
-      thread_factory = lambda do |&block|
-        threads << block
-        instance_double("Thread")
-      end
-
       client = described_class.new(
         configuration: configuration,
         backend: backend,
         sleeper: sleeper,
-        thread_factory: thread_factory,
+        thread_factory: thread_factory_without_run,
         monotonic_clock: clock
       )
       client.connect
       client.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT)
 
-      now += 2.0
-      threads.first.call
+      # Past heartbeat interval but still under liveness timeout — private feeds skip heartbeat-driven
+      # reconnect, and the socket should still read as alive.
+      now += 0.5
+      client.send(:connection_manager).send(:check_liveness!)
 
       expect(backend).to have_received(:connect).once
       expect(client.alive?).to be(true)
@@ -173,7 +169,6 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
 
       expect(backend).to have_received(:connect).twice
       expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).at_least(:twice)
-      expect(sleeper).to have_received(:sleep).with(0.01)
     end
   end
 
@@ -188,24 +183,18 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         handlers[event_name] = block
       end
 
-      threads = []
-      thread_factory = lambda do |&block|
-        threads << block
-        instance_double("Thread")
-      end
-
       client = described_class.new(
         configuration: configuration,
         backend: backend,
         sleeper: sleeper,
-        thread_factory: thread_factory,
+        thread_factory: thread_factory_without_run,
         monotonic_clock: clock
       )
       client.connect
       client.subscribe_public(channel_name: "B-BTC_USDT@prices", event_name: "price-change")
 
       now += 2.0
-      threads.first.call
+      client.send(:connection_manager).send(:check_liveness!)
 
       expect(backend).to have_received(:connect).twice
       expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).at_least(:twice)

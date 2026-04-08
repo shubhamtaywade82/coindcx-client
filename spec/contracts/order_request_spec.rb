@@ -67,6 +67,19 @@ RSpec.describe CoinDCX::Contracts::OrderRequest do
       expect(order).to include(side: "sell", pair: "B-BTC_USDT", quantity: 1)
     end
 
+    it "accepts total_quantity (CoinDCX futures create payload style)" do
+      order = described_class.validate_futures_create!(
+        side: "buy",
+        pair: "B-SOL_USDT",
+        total_quantity: "0.01",
+        order_type: "market_order",
+        margin_currency_short_name: "USDT",
+        leverage: 3
+      )
+
+      expect(order).to include(side: "buy", pair: "B-SOL_USDT", total_quantity: "0.01")
+    end
+
     it "rejects malformed pair identifiers" do
       expect do
         described_class.validate_futures_create!(

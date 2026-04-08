@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Futures `validate_futures_create!` accepts `total_quantity` (derivatives create style) alongside `quantity` and `size`.
+
 All notable changes to `coindcx-client` should be documented in this file.
 
 The release workflow expects a section whose heading matches the version tag being
