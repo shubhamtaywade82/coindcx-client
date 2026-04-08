@@ -12,7 +12,7 @@ RSpec.describe CoinDCX::WS::SocketIOSimpleBackend do
   end
 
   it 'delegates connect, emit, on, and disconnect to the socket client' do
-    allow(socket_factory).to receive(:connect).with('wss://stream.coindcx.com').and_return(socket)
+    allow(socket_factory).to receive(:connect).with('wss://stream.coindcx.com', hash_including(EIO: 4)).and_return(socket)
 
     backend.connect('wss://stream.coindcx.com')
     backend.emit('join', { 'channelName' => 'coindcx' })

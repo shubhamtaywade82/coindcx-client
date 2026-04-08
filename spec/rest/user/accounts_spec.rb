@@ -15,7 +15,7 @@ RSpec.describe CoinDCX::REST::User::Accounts do
     resource.list_balances
     resource.fetch_info
 
-    expect(http_client).to have_received(:post).with('/exchange/v1/users/balances', body: {}, auth: true, base: :api, bucket: nil)
-    expect(http_client).to have_received(:post).with('/exchange/v1/users/info', body: {}, auth: true, base: :api, bucket: nil)
+    expect(http_client).to have_received(:post).with('/exchange/v1/users/balances', body: {}, auth: true, base: :api, bucket: :user_balances)
+    expect(http_client).to have_received(:post).with('/exchange/v1/users/info', body: {}, auth: true, base: :api, bucket: :user_info)
   end
 end

@@ -8,6 +8,7 @@ module CoinDCX
           post(
             "/exchange/v1/derivatives/futures/wallets/transfer",
             auth: true,
+            bucket: :futures_wallet_transfer,
             body: {
               transfer_type: transfer_type,
               amount: amount,
@@ -18,7 +19,12 @@ module CoinDCX
         end
 
         def fetch_details(attributes = {})
-          get("/exchange/v1/derivatives/futures/wallets", body: attributes, auth: true)
+          get(
+            "/exchange/v1/derivatives/futures/wallets",
+            body: attributes,
+            auth: true,
+            bucket: :futures_wallet_details
+          )
         end
 
         def list_transactions(page: 1, size: 1000, timestamp: nil)
@@ -28,7 +34,8 @@ module CoinDCX
             "/exchange/v1/derivatives/futures/wallets/transactions",
             params: { page: page, size: size },
             body: body,
-            auth: true
+            auth: true,
+            bucket: :futures_wallet_transactions
           )
         end
       end

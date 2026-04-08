@@ -9,10 +9,8 @@ module CoinDCX
         @mutex = Mutex.new
       end
 
-      def acquire(bucket_name)
-        return if bucket_name.nil?
-
-        definition = @definitions[bucket_name.to_sym]
+      def throttle(bucket_name, required: false)
+        definition = definition_for(bucket_name, required: required)
         return if definition.nil?
 
         loop do
@@ -26,7 +24,23 @@ module CoinDCX
         end
       end
 
+      alias acquire throttle
+
       private
+
+      def definition_for(bucket_name, required:)
+        if bucket_name.nil?
+          return nil unless required
+
+          raise Errors::ConfigurationError, "missing rate limit definition for authenticated request"
+        end
+
+        definition = @definitions[bucket_name.to_sym]
+        return definition unless definition.nil?
+        return unless required
+
+        raise Errors::ConfigurationError, "missing rate limit definition for #{bucket_name}"
+      end
 
       def reserve_slot(bucket_name, definition)
         bucket_key = bucket_name.to_sym
