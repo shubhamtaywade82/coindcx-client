@@ -17,14 +17,15 @@ RSpec.describe CoinDCX::REST::Public::MarketData do
     resource.fetch_order_book(pair: 'B-BTC_USDT')
     resource.list_candles(pair: 'B-BTC_USDT', interval: '1m', start_time: 1, end_time: 2, limit: 3)
 
-    expect(http_client).to have_received(:get).with('/exchange/ticker', params: {}, auth: false, base: :api, bucket: nil)
-    expect(http_client).to have_received(:get).with('/exchange/v1/markets', params: {}, auth: false, base: :api, bucket: nil)
-    expect(http_client).to have_received(:get).with('/exchange/v1/markets_details', params: {}, auth: false, base: :api, bucket: nil)
-    expect(http_client).to have_received(:get).with('/market_data/trade_history', params: { pair: 'B-BTC_USDT', limit: 10 }, auth: false,
-                                                                                  base: :public, bucket: nil)
-    expect(http_client).to have_received(:get).with('/market_data/orderbook', params: { pair: 'B-BTC_USDT' }, auth: false, base: :public,
+    expect(http_client).to have_received(:get).with('/exchange/ticker', params: {}, body: {}, auth: false, base: :api, bucket: nil)
+    expect(http_client).to have_received(:get).with('/exchange/v1/markets', params: {}, body: {}, auth: false, base: :api, bucket: nil)
+    expect(http_client).to have_received(:get).with('/exchange/v1/markets_details', params: {}, body: {}, auth: false, base: :api, bucket: nil)
+    expect(http_client).to have_received(:get).with('/market_data/trade_history', params: { pair: 'B-BTC_USDT', limit: 10 }, body: {},
+                                                                                  auth: false, base: :public, bucket: nil)
+    expect(http_client).to have_received(:get).with('/market_data/orderbook', params: { pair: 'B-BTC_USDT' }, body: {}, auth: false, base: :public,
                                                                               bucket: nil)
     expect(http_client).to have_received(:get).with('/market_data/candles',
-                                                    params: { pair: 'B-BTC_USDT', interval: '1m', startTime: 1, endTime: 2, limit: 3 }, auth: false, base: :public, bucket: nil)
+                                                    params: { pair: 'B-BTC_USDT', interval: '1m', startTime: 1, endTime: 2, limit: 3 }, body: {},
+                                                    auth: false, base: :public, bucket: nil)
   end
 end

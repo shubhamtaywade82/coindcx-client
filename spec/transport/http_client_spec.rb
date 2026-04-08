@@ -14,6 +14,30 @@ RSpec.describe CoinDCX::Transport::HttpClient do
   let(:stubs) { Faraday::Adapter::Test::Stubs.new }
   subject(:http_client) { described_class.new(configuration: configuration, stubs: stubs) }
 
+  describe "#get" do
+    context "when authenticated with a JSON body (CoinDCX futures wallet-style GET)" do
+      it "sends signed JSON in the request body and query params on the URL" do
+        stubs.get("/exchange/v1/derivatives/futures/wallets/transactions") do |env|
+          expect(env.request_headers["X-AUTH-APIKEY"]).to eq("api-key")
+          expect(env.request_headers["X-AUTH-SIGNATURE"]).not_to be_nil
+          expect(env.body).to match(/"timestamp":\d+/)
+          expect(env.url.query).to eq("page=1&size=10")
+          [200, { "Content-Type" => "application/json" }, "[]"]
+        end
+
+        response_body = http_client.get(
+          "/exchange/v1/derivatives/futures/wallets/transactions",
+          params: { page: 1, size: 10 },
+          body: {},
+          auth: true
+        )
+
+        expect(response_body).to eq([])
+        stubs.verify_stubbed_calls
+      end
+    end
+  end
+
   describe "#post" do
     context "when the response is successful" do
       it "sends signed JSON to the API host" do

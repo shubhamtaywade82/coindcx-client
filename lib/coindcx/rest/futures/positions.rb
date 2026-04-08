@@ -41,7 +41,7 @@ module CoinDCX
         end
 
         def fetch_cross_margin_details(attributes = {})
-          post("/exchange/v1/derivatives/futures/positions/cross_margin_details", auth: true, body: attributes)
+          get("/exchange/v1/derivatives/futures/positions/cross_margin_details", body: attributes, auth: true)
         end
 
         def update_margin_type(attributes)

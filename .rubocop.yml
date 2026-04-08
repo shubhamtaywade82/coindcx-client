@@ -20,12 +20,28 @@ Metrics/BlockLength:
 
 Metrics/ClassLength:
   Max: 120
+  Exclude:
+    - 'scripts/**/*'
+
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - 'scripts/**/*'
 
 Metrics/MethodLength:
   Max: 15
+  Exclude:
+    - 'scripts/**/*'
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - 'scripts/**/*'
 
 Metrics/ParameterLists:
   Max: 7
+
+Lint/ScriptPermission:
+  Exclude:
+    - 'scripts/**/*'
 
 Naming/BlockForwarding:
   Enabled: false

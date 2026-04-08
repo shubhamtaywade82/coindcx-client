@@ -9,6 +9,7 @@ RSpec.describe CoinDCX::REST::Futures::Positions do
 
   before do
     allow(http_client).to receive(:post).and_return({})
+    allow(http_client).to receive(:get).and_return({})
   end
 
   it 'routes futures position operations through authenticated transport calls' do
@@ -42,8 +43,8 @@ RSpec.describe CoinDCX::REST::Futures::Positions do
                                                                                                                auth: true, base: :api, bucket: nil)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/transactions', body: {}, auth: true,
                                                                                                                 base: :api, bucket: nil)
-    expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/cross_margin_details', body: {},
-                                                                                                                        auth: true, base: :api, bucket: nil)
+    expect(http_client).to have_received(:get).with('/exchange/v1/derivatives/futures/positions/cross_margin_details', params: {}, body: {},
+                                                                                                                       auth: true, base: :api, bucket: nil)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/margin_type', body: { id: '1' },
                                                                                                                auth: true, base: :api, bucket: nil)
   end
