@@ -5,7 +5,7 @@ module CoinDCX
     DEFAULT_API_BASE_URL = "https://api.coindcx.com"
     DEFAULT_PUBLIC_BASE_URL = "https://public.coindcx.com"
     DEFAULT_SOCKET_BASE_URL = "wss://stream.coindcx.com"
-    DEFAULT_USER_AGENT = "coindcx-client/#{VERSION}"
+    DEFAULT_USER_AGENT = "coindcx-client/#{VERSION}".freeze
     DEFAULT_ENDPOINT_RATE_LIMITS = {
       spot_create_order_multiple: { limit: 2000, period: 60 },
       spot_create_order: { limit: 2000, period: 60 },

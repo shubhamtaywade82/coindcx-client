@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Gem version to publish (must match lib/coindcx/version.rb)'
+        required: true
+      publish:
+        description: 'Publish to RubyGems'
+        required: true
+        type: boolean
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: rubygems-release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install
+
+      - name: Resolve release version
+        id: release_version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify version matches release trigger
+        run: |
+          VERSION=$(ruby -e "require './lib/coindcx/version'; puts CoinDCX::VERSION")
+          TARGET_VERSION='${{ steps.release_version.outputs.value }}'
+
+          if [ "$VERSION" != "$TARGET_VERSION" ]; then
+            echo "Version mismatch: $VERSION != $TARGET_VERSION"
+            exit 1
+          fi
+
+      - name: Run RuboCop
+        run: bundle exec rubocop
+
+      - name: Run tests (gate)
+        run: bundle exec rspec
+
+      - name: Build gem
+        run: gem build coindcx-client.gemspec
+
+      - name: Publish to RubyGems
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.publish == 'true'
+        run: |
+          mkdir -p ~/.gem
+          echo ":rubygems_api_key: ${{ secrets.RUBYGEMS_API_KEY }}" > ~/.gem/credentials
+          chmod 0600 ~/.gem/credentials
+          gem push coindcx-client-*.gem

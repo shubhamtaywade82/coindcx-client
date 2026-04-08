@@ -37,9 +37,11 @@ RSpec.describe CoinDCX::Transport::HttpClient do
           [429, { "Content-Type" => "application/json" }, '{"message":"too many requests"}']
         end
 
-        expect do
+        request_call = lambda do
           http_client.post("/exchange/v1/orders/create", auth: true, body: { market: "SNTBTC" })
-        end.to raise_error(CoinDCX::Errors::RateLimitError) do |error|
+        end
+
+        expect(&request_call).to raise_error(CoinDCX::Errors::RateLimitError) do |error|
           expect(error.status).to eq(429)
           expect(error.body).to eq("message" => "too many requests")
         end

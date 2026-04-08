@@ -4,6 +4,7 @@ module CoinDCX
   module Contracts
     module SocketBackend
       REQUIRED_METHODS = %i[connect emit on disconnect].freeze
+
       module_function
 
       def validate!(backend)

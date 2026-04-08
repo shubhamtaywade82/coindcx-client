@@ -53,11 +53,11 @@ module CoinDCX
         begin
           attempts += 1
           @backend.connect(configuration.socket_base_url)
-        rescue Errors::SocketConnectionError => error
-          raise error if attempts > configuration.socket_reconnect_attempts
+        rescue Errors::SocketConnectionError => e
+          raise e if attempts > configuration.socket_reconnect_attempts
 
           sleep_interval = configuration.socket_reconnect_interval * attempts
-          logger.warn("Retrying CoinDCX socket connection after #{error.class}: attempt=#{attempts}, sleep=#{sleep_interval}")
+          logger.warn("Retrying CoinDCX socket connection after #{e.class}: attempt=#{attempts}, sleep=#{sleep_interval}")
           sleeper.sleep(sleep_interval)
           retry
         end

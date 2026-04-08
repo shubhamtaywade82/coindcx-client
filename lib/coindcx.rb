@@ -8,7 +8,7 @@ require_relative "coindcx/contracts/channel_name"
 require_relative "coindcx/contracts/socket_backend"
 require_relative "coindcx/models/base_model"
 
-Dir[File.join(__dir__, "coindcx/models/*.rb")].sort.each do |file|
+Dir[File.join(__dir__, "coindcx/models/*.rb")].each do |file|
   require file unless file.end_with?("base_model.rb")
 end
 
@@ -18,11 +18,11 @@ require_relative "coindcx/transport/retry_policy"
 require_relative "coindcx/transport/http_client"
 require_relative "coindcx/rest/base_resource"
 
-Dir[File.join(__dir__, "coindcx/rest/**/*.rb")].sort.each do |file|
+Dir[File.join(__dir__, "coindcx/rest/**/*.rb")].each do |file|
   require file unless file.end_with?("base_resource.rb")
 end
 
-Dir[File.join(__dir__, "coindcx/ws/**/*.rb")].sort.each do |file|
+Dir[File.join(__dir__, "coindcx/ws/**/*.rb")].each do |file|
   require file
 end
 

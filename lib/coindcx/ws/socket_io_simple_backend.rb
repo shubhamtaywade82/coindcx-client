@@ -11,8 +11,8 @@ module CoinDCX
 
       def connect(url)
         @socket = @socket_factory.connect(url)
-      rescue StandardError => error
-        raise Errors::SocketConnectionError, error.message
+      rescue StandardError => e
+        raise Errors::SocketConnectionError, e.message
       end
 
       def emit(event_name, payload)

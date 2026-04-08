@@ -9,7 +9,7 @@ module CoinDCX
         def list_active_instruments(margin_currency_short_names: ["USDT"])
           get(
             "/exchange/v1/derivatives/futures/data/active_instruments",
-            params: { "margin_currency_short_name[]": margin_currency_short_names }
+            params: { 'margin_currency_short_name[]': margin_currency_short_names }
           )
         end
 
