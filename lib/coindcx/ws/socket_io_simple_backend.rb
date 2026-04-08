@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "uri_ruby3_compat"
 require "socket.io-client-simple"
 
 module CoinDCX

@@ -24,7 +24,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
   end
 
   describe "#subscribe_public" do
-    it "rejoins subscriptions after a reconnect event" do
+    it "does not re-emit joins on socket :connect alone; recovery rejoins after a rebuilt connection" do
       handlers = {}
       allow(backend).to receive(:connect)
       allow(backend).to receive(:on) do |event_name, &block|
@@ -39,7 +39,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
 
       handlers.fetch(:connect).call
 
-      expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).twice
+      expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).once
     end
   end
 

@@ -64,6 +64,15 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
       ]
 
       manager.connect
+      # Heartbeat liveness only runs when a public subscription exists; include one so stale
+      # connection recovery exercises resubscribe (and fresh private join payloads).
+      manager.subscribe(
+        type: :public,
+        channel_name: "B-BTC_USDT@prices",
+        event_name: "price-change",
+        payload_builder: -> { { "channelName" => "B-BTC_USDT@prices" } },
+        delivery_mode: :at_least_once
+      )
       manager.subscribe(
         type: :private,
         channel_name: "coindcx",
@@ -76,6 +85,10 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
 
       manager.send(:check_liveness!)
 
+      expect(backend).to have_received(:emit).with(
+        "join",
+        { "channelName" => "B-BTC_USDT@prices" }
+      ).twice
       expect(backend).to have_received(:emit).with(
         "join",
         { "channelName" => "coindcx", "authSignature" => "first", "apiKey" => "api-key" }
@@ -102,6 +115,48 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
 
       expect(backend).to have_received(:connect).once
       expect(backend).not_to have_received(:disconnect)
+    end
+  end
+
+  describe "socket.io listener binding (event_emitter uses instance_exec on the client)" do
+    let(:captured_listeners) { {} }
+
+    before do
+      allow(backend).to receive(:on) do |event, &block|
+        captured_listeners[event] = block
+      end
+    end
+
+    it "runs disconnect without NameError when the block executes with the socket as self" do
+      manager.connect
+      manager.define_singleton_method(:reconnect) {}
+
+      disconnect_block = captured_listeners[:disconnect]
+      expect(disconnect_block).to be_a(Proc)
+
+      bogus_socket = Object.new
+      expect { bogus_socket.instance_exec(&disconnect_block) }.not_to raise_error
+    end
+
+    it "delivers public payloads to registered handlers when the bridge runs under instance_exec" do
+      received = []
+      manager.connect
+      manager.on("price-change") { |payload| received << payload }
+      manager.subscribe(
+        type: :public,
+        channel_name: "B-BTC_USDT@prices",
+        event_name: "price-change",
+        payload_builder: -> { { "channelName" => "B-BTC_USDT@prices" } },
+        delivery_mode: :at_least_once
+      )
+
+      bridge = captured_listeners["price-change"]
+      expect(bridge).to be_a(Proc)
+
+      tick = { "p" => "1.0" }
+      Object.new.instance_exec(tick, &bridge)
+
+      expect(received).to eq([tick])
     end
   end
 

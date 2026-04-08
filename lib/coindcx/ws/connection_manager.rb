@@ -115,8 +115,11 @@ module CoinDCX
 
       def register_runtime_handlers
         @registered_event_names = Set.new
-        backend.on(:connect) { handle_connect }
-        backend.on(:disconnect) { handle_disconnect }
+        # socket.io-client-simple uses event_emitter's instance_exec(socket, *args) for listeners,
+        # so blocks must not rely on implicit self (handle_* would resolve on the socket client).
+        manager = self
+        backend.on(:connect) { |*_args| manager.send(:handle_connect) }
+        backend.on(:disconnect) { |*_args| manager.send(:handle_disconnect) }
         subscriptions.event_names.each { |event_name| register_event_bridge(event_name) }
       end
 
@@ -181,9 +184,10 @@ module CoinDCX
       def register_event_bridge(event_name)
         return if registered_event_names.include?(event_name)
 
-        backend.on(event_name) do |payload|
-          touch_activity!
-          dispatch(event_name, payload)
+        manager = self
+        backend.on(event_name) do |payload, *_rest|
+          manager.send(:touch_activity!)
+          manager.send(:dispatch, event_name, payload)
         end
 
         registered_event_names << event_name
