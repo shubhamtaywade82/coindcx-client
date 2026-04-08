@@ -158,6 +158,26 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
 
       expect(received).to eq([tick])
     end
+
+    it "coalesces Socket.IO multi-arg frames into the hash payload for handlers" do
+      received = []
+      manager.connect
+      manager.on("new-trade") { |payload| received << payload }
+      manager.subscribe(
+        type: :public,
+        channel_name: "B-BTC_USDT@trades-futures",
+        event_name: "new-trade",
+        payload_builder: -> { { "channelName" => "B-BTC_USDT@trades-futures" } },
+        delivery_mode: :at_least_once
+      )
+
+      bridge = captured_listeners["new-trade"]
+      channel = "B-BTC_USDT@trades-futures"
+      trade = { "p" => "2.0", "s" => "BTCUSDT" }
+      Object.new.instance_exec(channel, trade, &bridge)
+
+      expect(received).to eq([trade])
+    end
   end
 
   describe "#alive?" do

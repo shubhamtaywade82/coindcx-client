@@ -185,12 +185,27 @@ module CoinDCX
         return if registered_event_names.include?(event_name)
 
         manager = self
-        backend.on(event_name) do |payload, *_rest|
+        # Socket.IO may emit multiple data frames after the event name, e.g. [channelName, payloadHash].
+        # Forwarding only the first argument often yields a bare String and drops the price object.
+        backend.on(event_name) do |*args|
           manager.send(:touch_activity!)
-          manager.send(:dispatch, event_name, payload)
+          coalesced = manager.send(:coalesce_socket_event_payload, args)
+          manager.send(:dispatch, event_name, coalesced)
         end
 
         registered_event_names << event_name
+      end
+
+      def coalesce_socket_event_payload(args)
+        parts = Array(args).flatten(1).compact
+        return nil if parts.empty?
+        return parts.first if parts.size == 1
+
+        hashes = parts.select { |p| p.is_a?(Hash) }
+        return hashes.reduce { |acc, h| acc.merge(h) } if hashes.size > 1
+        return hashes.first if hashes.size == 1
+
+        parts.last
       end
 
       def dispatch(event_name, payload)
