@@ -16,6 +16,15 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
 
   let(:backend) { instance_double("SocketBackend") }
   let(:sleeper) { class_double(Kernel, sleep: nil) }
+  # Stubbed sleeper.sleep returns immediately; a real heartbeat Thread would tight-loop on the GVL and
+  # starve examples. Capture the loop body unless a test explicitly runs it (see heartbeat liveness).
+  let(:captured_heartbeat_blocks) { [] }
+  let(:thread_factory_without_run) do
+    lambda do |&block|
+      captured_heartbeat_blocks << block
+      instance_double(Thread, join: nil, kill: nil)
+    end
+  end
 
   before do
     allow(backend).to receive(:on)
@@ -31,7 +40,12 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         handlers[event_name] = block
       end
 
-      client = described_class.new(configuration: configuration, backend: backend, sleeper: sleeper)
+      client = described_class.new(
+        configuration: configuration,
+        backend: backend,
+        sleeper: sleeper,
+        thread_factory: thread_factory_without_run
+      )
       client.connect
       client.subscribe_public(channel_name: "B-BTC_USDT@prices", event_name: "price-change")
 
@@ -51,7 +65,12 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         handlers[event_name] = block
       end
 
-      client = described_class.new(configuration: configuration, backend: backend, sleeper: sleeper)
+      client = described_class.new(
+        configuration: configuration,
+        backend: backend,
+        sleeper: sleeper,
+        thread_factory: thread_factory_without_run
+      )
       client.connect
       client.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT)
 
@@ -127,7 +146,12 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         true
       end
 
-      client = described_class.new(configuration: configuration, backend: backend, sleeper: sleeper)
+      client = described_class.new(
+        configuration: configuration,
+        backend: backend,
+        sleeper: sleeper,
+        thread_factory: thread_factory_without_run
+      )
       client.connect
 
       expect(backend).to have_received(:connect).twice
@@ -141,7 +165,12 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         handlers[event_name] = block
       end
 
-      client = described_class.new(configuration: configuration, backend: backend, sleeper: sleeper)
+      client = described_class.new(
+        configuration: configuration,
+        backend: backend,
+        sleeper: sleeper,
+        thread_factory: thread_factory_without_run
+      )
       client.connect
       client.subscribe_public(channel_name: "B-BTC_USDT@prices", event_name: "price-change")
 
