@@ -16,12 +16,14 @@ RSpec::Mocks.with_temporary_scope do
   allow(backend).to receive(:emit)
   allow(backend).to receive(:disconnect)
   allow(backend).to receive(:connect)
+  allow(backend).to receive(:start_transport!)
   allow(backend).to receive(:on) { |ev, &b| handlers[ev] = b }
 
   tf = ->(&) { instance_double(Thread) }
   client = CoinDCX::WS::SocketIOClient.new(configuration: configuration, backend: backend, sleeper: sleeper, thread_factory: tf)
   $stdout.puts "connecting"
   client.connect
+  handlers[:connect]&.call
   $stdout.puts "subscribe"
   client.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT)
   $stdout.puts "disconnect handler"

@@ -99,6 +99,22 @@ ws.subscribe_public(channel_name: channel, event_name: 'price-change') do |data|
 end
 ```
 
+To exercise **all documented Spot** public streams (and private `coindcx` events when `COINDCX_API_KEY` / `COINDCX_API_SECRET` are set), run from the repo root:
+
+```bash
+bundle exec ruby scripts/spot_sockets_smoke.rb
+```
+
+See the script header for `COINDCX_PAIR`, candle interval, order book depth, and throttling options.
+
+**Futures** streams use the same client and `coindcx` private channel; builders live on `CoinDCX::WS::PublicChannels` (`futures_candlestick`, `futures_order_book`, `futures_ltp`, `futures_new_trade`, `current_prices_futures`) and private event names `DF_POSITION_UPDATE_EVENT`, `DF_ORDER_UPDATE_EVENT`, plus shared `BALANCE_UPDATE_EVENT`. Run:
+
+```bash
+bundle exec ruby scripts/futures_sockets_smoke.rb
+```
+
+Use `scripts/futures_stream_eth_sol.rb` or `scripts/futures_ws_subscription_smoke.rb` for narrower checks.
+
 The websocket client guarantees:
 
 - bounded reconnect attempts with exponential backoff

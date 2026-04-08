@@ -4,8 +4,11 @@ module CoinDCX
   module WS
     module PublicChannels
       VALID_SPOT_ORDER_BOOK_DEPTHS = [10, 20, 50].freeze
+      VALID_FUTURES_ORDER_BOOK_DEPTHS = VALID_SPOT_ORDER_BOOK_DEPTHS
       VALID_CURRENT_PRICES_SPOT_INTERVALS = %w[1s 10s].freeze
       CURRENT_PRICES_SPOT_UPDATE_EVENT = "currentPrices@spot#update"
+      CURRENT_PRICES_FUTURES_CHANNEL = "currentPrices@futures@rt"
+      CURRENT_PRICES_FUTURES_UPDATE_EVENT = "currentPrices@futures#update"
       PRICE_STATS_SPOT_UPDATE_EVENT = "priceStats@spot#update"
 
       module_function
@@ -45,6 +48,27 @@ module CoinDCX
 
       def new_trade(pair:)
         "#{Contracts::Identifiers.validate_pair!(pair)}@trades"
+      end
+
+      def futures_candlestick(instrument:, interval:)
+        ins = Contracts::Identifiers.validate_instrument!(instrument)
+        iv = interval.to_s.strip
+        raise Errors::ValidationError, "futures candlestick interval must be non-empty" if iv.empty?
+
+        "#{ins}_#{iv}-futures"
+      end
+
+      def futures_order_book(instrument:, depth: 20)
+        ins = Contracts::Identifiers.validate_instrument!(instrument)
+        return "#{ins}@orderbook@#{depth}-futures" if VALID_FUTURES_ORDER_BOOK_DEPTHS.include?(depth)
+
+        depths = VALID_FUTURES_ORDER_BOOK_DEPTHS.sort.join(", ")
+        raise Errors::ValidationError,
+              "futures order book channels are snapshot-based; documented depths are #{depths}"
+      end
+
+      def current_prices_futures
+        CURRENT_PRICES_FUTURES_CHANNEL
       end
 
       def futures_price_stats(instrument:)

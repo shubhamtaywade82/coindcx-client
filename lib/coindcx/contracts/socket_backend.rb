@@ -3,7 +3,7 @@
 module CoinDCX
   module Contracts
     module SocketBackend
-      REQUIRED_METHODS = %i[connect emit on disconnect].freeze
+      REQUIRED_METHODS = %i[connect start_transport! emit on disconnect].freeze
 
       module_function
 

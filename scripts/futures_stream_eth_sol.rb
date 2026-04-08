@@ -11,7 +11,11 @@
 #   COINDCX_WS_INSTRUMENTS — comma-separated pair codes (default: B-ETH_USDT,B-SOL_USDT)
 #   COINDCX_API_KEY / COINDCX_API_SECRET — optional for public futures only
 #
+# Note: handlers for the same Socket.IO event name are all invoked for every message; lines are printed
+# only when the payload instrument hint matches the subscription row.
+#
 require "logger"
+require "time"
 require_relative "../lib/coindcx"
 
 $stdout.sync = true
@@ -93,17 +97,38 @@ class FuturesEthSolStream
       trade_channel = pc.futures_new_trade(instrument: instrument)
 
       ws.subscribe_public(channel_name: price_channel, event_name: PRICE_EVENT) do |payload|
-        print_line(instrument, PRICE_EVENT, payload)
+        print_line_if_instrument(instrument, PRICE_EVENT, payload)
       end
       ws.subscribe_public(channel_name: trade_channel, event_name: TRADE_EVENT) do |payload|
-        print_line(instrument, TRADE_EVENT, payload)
+        print_line_if_instrument(instrument, TRADE_EVENT, payload)
       end
     end
   end
 
-  def print_line(instrument, event_name, payload)
+  def print_line_if_instrument(instrument, event_name, payload)
+    return unless payload_targets_instrument?(payload, instrument)
+
     ts = Time.now.utc.iso8601(3)
     puts "#{ts} #{instrument} #{event_name} #{payload.inspect}"
+  end
+
+  def payload_targets_instrument?(payload, instrument)
+    return true unless payload.is_a?(Hash)
+
+    hint = payload["s"] || payload[:s] ||
+           payload["pair"] || payload[:pair] ||
+           payload["market"] || payload[:market] ||
+           payload["instrument"] || payload[:instrument] ||
+           payload["symbol"] || payload[:symbol]
+    return true if hint.nil? || hint.to_s.strip.empty?
+
+    compact_pair_code(hint) == compact_pair_code(instrument)
+  end
+
+  def compact_pair_code(code)
+    s = code.to_s.strip.upcase
+    s = s.sub(/\A[A-Z]+-/, "")
+    s.delete("_")
   end
 
   def outer_connect_loop(configuration)

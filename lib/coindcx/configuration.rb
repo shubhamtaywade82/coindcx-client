@@ -67,7 +67,9 @@ module CoinDCX
       @api_base_url = DEFAULT_API_BASE_URL
       @public_base_url = DEFAULT_PUBLIC_BASE_URL
       @socket_base_url = DEFAULT_SOCKET_BASE_URL
-      @socket_io_connect_options = { EIO: 4 }
+      # CoinDCX stream matches official socket.io-client 2.x (Engine.IO v3). The default backend
+      # `socket.io-client-simple` only parses that protocol; `EIO: 4` breaks the handshake/payloads.
+      @socket_io_connect_options = { EIO: 3 }
       @open_timeout = 5
       @read_timeout = 30
       @max_retries = 2

@@ -15,7 +15,10 @@
 # API keys are optional for public futures streams; set COINDCX_API_KEY / COINDCX_API_SECRET
 # if you also want private streams (see COINDCX_WS_PRIVATE).
 #
-#   COINDCX_WS_PRIVATE=1 — after public subs, also subscribe to private order-update (requires keys)
+#   COINDCX_WS_PRIVATE=1 — after public subs, also subscribe to futures private df-order-update + df-position-update (requires keys)
+#
+# Note: CoinDCX fans out each Socket.IO event to every handler for that event name. Counts below only
+# increment when the payload's instrument hint (`s` / `pair` / etc.) matches the subscription row.
 
 require "logger"
 require_relative "../lib/coindcx"
@@ -111,8 +114,31 @@ class FuturesPublicWsTester
   def auto_pick_instruments
     count = Integer(ENV.fetch("COINDCX_WS_INSTRUMENT_COUNT", DEFAULT_AUTO_COUNT))
     currencies = parse_comma_list("COINDCX_WS_MARGIN_CURRENCIES", %w[USDT])
-    rows = CoinDCX.client.futures.market_data.list_active_instruments(margin_currency_short_names: currencies)
-    Array(rows).filter_map { |row| row["pair"] || row[:pair] }.uniq.first(count)
+    raw = CoinDCX.client.futures.market_data.list_active_instruments(margin_currency_short_names: currencies)
+    rows = normalize_active_instruments_payload(raw)
+    rows.filter_map { |row| instrument_pair_from_row(row) }.uniq.first(count)
+  end
+
+  def normalize_active_instruments_payload(raw)
+    case raw
+    when Array
+      raw
+    when Hash
+      Array(raw["data"] || raw[:data] || raw["pairs"] || raw[:pairs] || raw["instruments"] || raw[:instruments] || [])
+    else
+      []
+    end
+  end
+
+  def instrument_pair_from_row(row)
+    case row
+    when String
+      row.strip.empty? ? nil : row.strip
+    when Hash
+      row["pair"] || row[:pair] || row["instrument"] || row[:instrument]
+    else
+      nil
+    end
   end
 
   def parse_comma_list(key, default)
@@ -128,11 +154,11 @@ class FuturesPublicWsTester
       price_channel = pc.futures_price_stats(instrument: instrument)
       trade_channel = pc.futures_new_trade(instrument: instrument)
 
-      ws.subscribe_public(channel_name: price_channel, event_name: PRICE_EVENT) do |_payload|
-        bump(:price, instrument)
+      ws.subscribe_public(channel_name: price_channel, event_name: PRICE_EVENT) do |payload|
+        bump(:price, instrument, payload)
       end
-      ws.subscribe_public(channel_name: trade_channel, event_name: TRADE_EVENT) do |_payload|
-        bump(:trade, instrument)
+      ws.subscribe_public(channel_name: trade_channel, event_name: TRADE_EVENT) do |payload|
+        bump(:trade, instrument, payload)
       end
 
       puts "  join #{price_channel} → #{PRICE_EVENT}"
@@ -143,10 +169,14 @@ class FuturesPublicWsTester
   def subscribe_private_optional
     return unless truthy_env?("COINDCX_WS_PRIVATE")
 
-    ws.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT) do |payload|
-      puts "[private order-update] #{payload.inspect[0, 200]}..."
+    priv = CoinDCX::WS::PrivateChannels
+    ws.subscribe_private(event_name: priv::DF_ORDER_UPDATE_EVENT) do |payload|
+      puts "[private #{priv::DF_ORDER_UPDATE_EVENT}] #{payload.inspect[0, 200]}..."
     end
-    puts "  join private coindcx → #{CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT}"
+    ws.subscribe_private(event_name: priv::DF_POSITION_UPDATE_EVENT) do |payload|
+      puts "[private #{priv::DF_POSITION_UPDATE_EVENT}] #{payload.inspect[0, 200]}..."
+    end
+    puts "  join private coindcx → #{priv::DF_ORDER_UPDATE_EVENT}, #{priv::DF_POSITION_UPDATE_EVENT}"
   rescue CoinDCX::Errors::AuthenticationError => e
     warn("Private WS not started: #{e.message}")
   end
@@ -155,7 +185,9 @@ class FuturesPublicWsTester
     %w[1 true yes on].include?(ENV.fetch(key, "").downcase)
   end
 
-  def bump(kind, instrument)
+  def bump(kind, instrument, payload)
+    return unless payload_targets_instrument?(payload, instrument)
+
     mutex.synchronize do
       case kind
       when :price
@@ -164,6 +196,25 @@ class FuturesPublicWsTester
         trade_counts[instrument] += 1
       end
     end
+  end
+
+  def payload_targets_instrument?(payload, instrument)
+    return true unless payload.is_a?(Hash)
+
+    hint = payload["s"] || payload[:s] ||
+           payload["pair"] || payload[:pair] ||
+           payload["market"] || payload[:market] ||
+           payload["instrument"] || payload[:instrument] ||
+           payload["symbol"] || payload[:symbol]
+    return true if hint.nil? || hint.to_s.strip.empty?
+
+    compact_pair_code(hint) == compact_pair_code(instrument)
+  end
+
+  def compact_pair_code(code)
+    s = code.to_s.strip.upcase
+    s = s.sub(/\A[A-Z]+-/, "")
+    s.delete("_")
   end
 
   def price_targets_met?(instruments)

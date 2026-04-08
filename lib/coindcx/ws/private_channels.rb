@@ -7,6 +7,9 @@ module CoinDCX
       BALANCE_UPDATE_EVENT = "balance-update"
       ORDER_UPDATE_EVENT = "order-update"
       TRADE_UPDATE_EVENT = "trade-update"
+      # Derivatives (futures) user stream — same authenticated `coindcx` channel as spot private.
+      DF_POSITION_UPDATE_EVENT = "df-position-update"
+      DF_ORDER_UPDATE_EVENT = "df-order-update"
 
       def initialize(configuration:)
         @configuration = configuration

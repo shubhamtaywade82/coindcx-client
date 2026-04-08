@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "json"
 require "set"
 
 module CoinDCX
@@ -20,6 +21,7 @@ module CoinDCX
         @registered_event_names = Set.new
         @mutex = Mutex.new
         @last_activity_at = monotonic_time
+        @engine_io_open = false
       end
 
       def connect
@@ -62,8 +64,10 @@ module CoinDCX
           delivery_mode: delivery_mode
         )
         register_event_bridge(event_name) if state.connected?
-        emit_join(subscription_for(type: type, channel_name: channel_name, event_name: event_name)) if state.connected?
-        transition_to(:subscribed) if state.connected?
+        if state.connected? && @engine_io_open
+          emit_join(subscription_for(type: type, channel_name: channel_name, event_name: event_name))
+        end
+        transition_to(:subscribed) if state.connected? && subscriptions.any?
         self
       end
 
@@ -105,12 +109,12 @@ module CoinDCX
       end
 
       def establish_connection
+        @engine_io_open = false
         backend.connect(configuration.socket_base_url)
-        touch_activity!
         register_runtime_handlers
+        backend.start_transport!
+        touch_activity!
         transition_to(:authenticated)
-        resubscribe_all
-        transition_to(:subscribed) if subscriptions.any?
       end
 
       def register_runtime_handlers
@@ -125,12 +129,15 @@ module CoinDCX
 
       def handle_connect
         touch_activity!
+        @engine_io_open = true
+        resubscribe_all
         transition_to(subscriptions.any? ? :subscribed : :authenticated)
       end
 
       def handle_disconnect
         return if state.stopping? || state.reconnecting?
 
+        @engine_io_open = false
         transition_to(:disconnected)
         log(
           :warn,
@@ -190,7 +197,8 @@ module CoinDCX
         backend.on(event_name) do |*args|
           manager.send(:touch_activity!)
           coalesced = manager.send(:coalesce_socket_event_payload, args)
-          manager.send(:dispatch, event_name, coalesced)
+          normalized = manager.send(:normalize_coin_dcx_event_payload, coalesced)
+          manager.send(:dispatch, event_name, normalized)
         end
 
         registered_event_names << event_name
@@ -206,6 +214,29 @@ module CoinDCX
         return hashes.first if hashes.size == 1
 
         parts.last
+      end
+
+      # CoinDCX often sends { "event" => "...", "data" => "<JSON string of fields>" }. Merge parsed
+      # fields into the top-level hash so consumers see p / s / etc. without a second parse.
+      def normalize_coin_dcx_event_payload(payload)
+        return payload unless payload.is_a?(Hash)
+
+        %w[data payload].each do |key|
+          raw = payload[key] || payload[key.to_sym]
+          next unless raw.is_a?(String) && !raw.strip.empty?
+
+          parsed = JSON.parse(raw)
+          next unless parsed.is_a?(Hash)
+
+          merged = payload.merge(parsed)
+          merged.delete(key)
+          merged.delete(key.to_sym)
+          return merged
+        end
+
+        payload
+      rescue JSON::ParserError
+        payload
       end
 
       def dispatch(event_name, payload)

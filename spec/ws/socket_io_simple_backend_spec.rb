@@ -1,34 +1,41 @@
 # frozen_string_literal: true
 
-require 'spec_helper'
+require "spec_helper"
 
 RSpec.describe CoinDCX::WS::SocketIOSimpleBackend do
-  let(:socket) { instance_double('SocketIoSocket', emit: true, close: true) }
-  let(:socket_factory) { class_double('SocketFactory') }
-  subject(:backend) { described_class.new(socket_factory: socket_factory) }
+  let(:client_instance) { instance_double("SocketIOClientInstance", connect: true, emit: true, on: true, disconnect: true) }
+  let(:client_class) { class_double("SocketIOClientClass", new: client_instance) }
+  subject(:backend) { described_class.new(socket_client_class: client_class, connect_options: { EIO: 3 }) }
 
   before do
-    allow(socket).to receive(:on)
+    allow(client_instance).to receive(:on)
   end
 
-  it 'delegates connect, emit, on, and disconnect to the socket client' do
-    allow(socket_factory).to receive(:connect).with('wss://stream.coindcx.com', hash_including(EIO: 4)).and_return(socket)
+  it "creates the client, registers listeners, then opens the transport" do
+    backend.connect("wss://stream.coindcx.com")
+    backend.on("price-change") { |_payload| nil }
+    backend.start_transport!
+    backend.emit("join", { "channelName" => "coindcx" })
 
-    backend.connect('wss://stream.coindcx.com')
-    backend.emit('join', { 'channelName' => 'coindcx' })
-    backend.on('price-change') { |_payload| nil }
+    expect(client_class).to have_received(:new).with("wss://stream.coindcx.com", hash_including(EIO: 3))
+    expect(client_instance).to have_received(:on).with("price-change")
+    expect(client_instance).to have_received(:connect)
+    expect(client_instance).to have_received(:emit).with("join", { "channelName" => "coindcx" })
+  end
+
+  it "disconnects the underlying client when present" do
+    backend.connect("wss://stream.coindcx.com")
+    backend.start_transport!
     backend.disconnect
 
-    expect(socket).to have_received(:emit).with('join', { 'channelName' => 'coindcx' })
-    expect(socket).to have_received(:on).with('price-change')
-    expect(socket).to have_received(:close)
+    expect(client_instance).to have_received(:disconnect)
   end
 
-  it 'raises a socket connection error when connect fails' do
-    allow(socket_factory).to receive(:connect).and_raise(StandardError, 'boom')
+  it "raises a socket connection error when client construction fails" do
+    allow(client_class).to receive(:new).and_raise(StandardError, "boom")
 
     expect do
-      backend.connect('wss://stream.coindcx.com')
-    end.to raise_error(CoinDCX::Errors::SocketConnectionError, 'boom')
+      backend.connect("wss://stream.coindcx.com")
+    end.to raise_error(CoinDCX::Errors::SocketConnectionError, "boom")
   end
 end

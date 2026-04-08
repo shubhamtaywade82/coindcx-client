@@ -27,6 +27,8 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
   end
 
   before do
+    allow(backend).to receive(:connect)
+    allow(backend).to receive(:start_transport!)
     allow(backend).to receive(:on)
     allow(backend).to receive(:emit)
     allow(backend).to receive(:disconnect)
@@ -34,8 +36,6 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
 
   describe "#leave_channel" do
     it "emits leave with a validated channelName" do
-      allow(backend).to receive(:connect)
-
       client = described_class.new(
         configuration: configuration,
         backend: backend,
@@ -53,9 +53,8 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
   end
 
   describe "#subscribe_public" do
-    it "does not re-emit joins on socket :connect alone; recovery rejoins after a rebuilt connection" do
+    it "emits join after Engine.IO open (:connect), and resubscribes on each open" do
       handlers = {}
-      allow(backend).to receive(:connect)
       allow(backend).to receive(:on) do |event_name, &block|
         handlers[event_name] = block
       end
@@ -69,11 +68,15 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
       client.connect
       client.subscribe_public(channel_name: "B-BTC_USDT@prices", event_name: "price-change")
 
-      expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).once
+      expect(backend).not_to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" })
 
       handlers.fetch(:connect).call
 
       expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).once
+
+      handlers.fetch(:connect).call
+
+      expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).twice
     end
   end
 
@@ -81,7 +84,6 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
     it "renews private channel auth payloads after reconnect" do
       handlers = {}
       captured_join_payloads = []
-      allow(backend).to receive(:connect)
       allow(backend).to receive(:on) do |event_name, &block|
         handlers[event_name] = block
       end
@@ -96,6 +98,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         thread_factory: thread_factory_without_run
       )
       client.connect
+      handlers.fetch(:connect).call
       client.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT)
 
       expect(captured_join_payloads.size).to eq(1)
@@ -110,6 +113,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         end
 
       handlers.fetch(:disconnect).call("network_lost")
+      handlers[:connect]&.call
 
       second_payload = captured_join_payloads.last
 
@@ -122,7 +126,6 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
       handlers = {}
       clock = -> { now }
 
-      allow(backend).to receive(:connect)
       allow(backend).to receive(:on) do |event_name, &block|
         handlers[event_name] = block
       end
@@ -135,6 +138,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         monotonic_clock: clock
       )
       client.connect
+      handlers.fetch(:connect).call
       client.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT)
 
       # Past heartbeat interval but still under liveness timeout — private feeds skip heartbeat-driven
@@ -154,7 +158,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         @connect_attempts += 1
         raise CoinDCX::Errors::SocketConnectionError, "temporary failure" if @connect_attempts == 1
 
-        true
+        self
       end
 
       client = described_class.new(
@@ -171,7 +175,6 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
 
     it "reconnects and resubscribes after a disconnect event" do
       handlers = {}
-      allow(backend).to receive(:connect)
       allow(backend).to receive(:on) do |event_name, &block|
         handlers[event_name] = block
       end
@@ -183,9 +186,11 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         thread_factory: thread_factory_without_run
       )
       client.connect
+      handlers.fetch(:connect).call
       client.subscribe_public(channel_name: "B-BTC_USDT@prices", event_name: "price-change")
 
       handlers.fetch(:disconnect).call("network_lost")
+      handlers[:connect]&.call
 
       expect(backend).to have_received(:connect).twice
       expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).at_least(:twice)
@@ -198,7 +203,6 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
       handlers = {}
       clock = -> { now }
 
-      allow(backend).to receive(:connect)
       allow(backend).to receive(:on) do |event_name, &block|
         handlers[event_name] = block
       end
@@ -211,10 +215,12 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         monotonic_clock: clock
       )
       client.connect
+      handlers.fetch(:connect).call
       client.subscribe_public(channel_name: "B-BTC_USDT@prices", event_name: "price-change")
 
       now += 2.0
       client.send(:connection_manager).send(:check_liveness!)
+      handlers[:connect]&.call
 
       expect(backend).to have_received(:connect).twice
       expect(backend).to have_received(:emit).with("join", { "channelName" => "B-BTC_USDT@prices" }).at_least(:twice)

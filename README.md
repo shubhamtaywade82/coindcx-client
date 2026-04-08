@@ -115,6 +115,12 @@ client.futures.orders.list(status: 'open', margin_currency_short_name: ['USDT'])
 
 CoinDCX documents Socket.io for websocket access. This gem keeps that boundary explicit and now tracks connection state, heartbeat liveness, private auth renewal, and subscription replay after reconnects.
 
+Socket.IO often delivers **multiple data arguments** after the event name (for example a channel string plus the quote object). The client **coalesces** those into a single Hash (merging multiple Hash frames) before invoking your block, so handlers always see one payload object.
+
+Live streams frequently wrap quotes as `{ "event" => "price-change", "data" => "<JSON string>" }`. The client **parses** that `data` string and **merges** the inner object to the top level before dispatch, so fields like `p` and `s` are directly on the hash passed to your block.
+
+**Fan-out:** one underlying listener is registered per `event_name` (for example all `price-change` subscriptions share it). Every handler for that event runs on **every** message. For multiple instruments, filter using payload hints such as `s`, `pair`, or `market` (see `scripts/futures_ws_subscription_smoke.rb`).
+
 ```ruby
 client = CoinDCX.client
 prices_channel = CoinDCX::WS::PublicChannels.price_stats(pair: 'B-BTC_USDT')
