@@ -2,6 +2,13 @@
 
 `coindcx-client` is a CoinDCX-specific Ruby gem scaffold built from a layered exchange-client architecture rather than a thin wrapper.
 
+## Documentation
+
+- [Docs index](./docs/README.md)
+- [Core usage](./docs/core.md)
+- [Rails integration](./docs/rails_integration.md)
+- [Standalone trading bot](./docs/standalone_bot.md)
+
 ## Design goals
 
 - keep transport, auth, resources, models, and websockets separate
@@ -26,12 +33,13 @@ lib/coindcx/ws/
 lib/coindcx/models/
 lib/coindcx/contracts/
 lib/coindcx/utils/
+docs/
 ```
 
 ## Installation
 
 ```ruby
-gem "coindcx-client"
+gem 'coindcx-client'
 ```
 
 For local development:
@@ -43,12 +51,12 @@ bundle install
 ## Configuration
 
 ```ruby
-require "logger"
-require "coindcx"
+require 'logger'
+require 'coindcx'
 
 CoinDCX.configure do |config|
-  config.api_key = ENV.fetch("COINDCX_API_KEY")
-  config.api_secret = ENV.fetch("COINDCX_API_SECRET")
+  config.api_key = ENV.fetch('COINDCX_API_KEY')
+  config.api_secret = ENV.fetch('COINDCX_API_SECRET')
   config.logger = Logger.new($stdout)
 
   # HTTP retry tuning
@@ -70,27 +78,27 @@ client = CoinDCX.client
 
 client.public.market_data.list_tickers
 client.public.market_data.list_market_details
-client.public.market_data.list_trades(pair: "B-BTC_USDT", limit: 50)
+client.public.market_data.list_trades(pair: 'B-BTC_USDT', limit: 50)
 
 client.spot.orders.create(
-  side: "buy",
-  order_type: "limit_order",
-  market: "SNTBTC",
-  price_per_unit: "0.03244",
+  side: 'buy',
+  order_type: 'limit_order',
+  market: 'SNTBTC',
+  price_per_unit: '0.03244',
   total_quantity: 400
 )
 
 client.user.accounts.list_balances
 client.transfers.wallets.transfer(
-  source_wallet_type: "spot",
-  destination_wallet_type: "futures",
-  currency_short_name: "USDT",
+  source_wallet_type: 'spot',
+  destination_wallet_type: 'futures',
+  currency_short_name: 'USDT',
   amount: 1
 )
 
-client.futures.market_data.list_active_instruments(margin_currency_short_names: ["USDT"])
-client.futures.market_data.fetch_instrument(pair: "B-BTC_USDT", margin_currency_short_name: "USDT")
-client.futures.orders.list(status: "open", margin_currency_short_name: ["USDT"])
+client.futures.market_data.list_active_instruments(margin_currency_short_names: ['USDT'])
+client.futures.market_data.fetch_instrument(pair: 'B-BTC_USDT', margin_currency_short_name: 'USDT')
+client.futures.orders.list(status: 'open', margin_currency_short_name: ['USDT'])
 ```
 
 ## Websocket usage
@@ -99,10 +107,10 @@ CoinDCX documents Socket.io for websocket access. This gem keeps that boundary e
 
 ```ruby
 client = CoinDCX.client
-prices_channel = CoinDCX::WS::PublicChannels.price_stats(pair: "B-BTC_USDT")
+prices_channel = CoinDCX::WS::PublicChannels.price_stats(pair: 'B-BTC_USDT')
 
 client.ws.connect
-client.ws.subscribe_public(channel_name: prices_channel, event_name: "price-change") do |payload|
+client.ws.subscribe_public(channel_name: prices_channel, event_name: 'price-change') do |payload|
   puts payload
 end
 ```

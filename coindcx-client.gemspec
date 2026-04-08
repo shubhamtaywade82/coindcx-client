@@ -18,6 +18,7 @@ Gem::Specification.new do |spec|
     Dir[
       'README.md',
       'AGENT.md',
+      'docs/**/*.md',
       'lib/**/*.rb',
       'spec/**/*.rb',
       '.github/workflows/*.yml',
