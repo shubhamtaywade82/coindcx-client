@@ -1,17 +1,24 @@
 # frozen_string_literal: true
 
+require "faraday"
 require "json"
-require "net/http"
-require "uri"
 
 module CoinDCX
   module Transport
     class HttpClient
-      RETRYABLE_ERRORS = [Timeout::Error, Errno::ECONNRESET, Errno::ETIMEDOUT, EOFError].freeze
-
-      def initialize(configuration:)
+      def initialize(configuration:, stubs: nil)
         @configuration = configuration
         @rate_limits = RateLimitRegistry.new(configuration.endpoint_rate_limits)
+        @logger = configuration.logger || Logging::NullLogger.new
+        @retry_policy = RetryPolicy.new(
+          max_retries: configuration.max_retries,
+          base_interval: configuration.retry_base_interval,
+          logger: @logger
+        )
+        @connections = {
+          api: build_connection(configuration.api_base_url, stubs),
+          public: build_connection(configuration.public_base_url, stubs)
+        }
       end
 
       attr_reader :configuration
@@ -30,71 +37,62 @@ module CoinDCX
 
       private
 
-      attr_reader :rate_limits
+      attr_reader :logger, :rate_limits, :retry_policy
 
       def request(method, path, params:, body:, auth:, base:, bucket:)
         rate_limits.acquire(bucket)
-        attempts = 0
+        logger.debug("CoinDCX #{method.upcase} #{base} #{path} bucket=#{bucket.inspect}")
 
-        begin
-          attempts += 1
-          uri = build_uri(path, params, base)
-          response = build_http(uri).request(build_request(method, uri, body, auth))
+        retry_policy.with_retries(method: method, path: path, base: base) do
+          response = connection_for(base).public_send(method, path) do |request|
+            request.headers["Accept"] = "application/json"
+            request.headers["User-Agent"] = configuration.user_agent
+            request.options.timeout = configuration.read_timeout
+            request.options.open_timeout = configuration.open_timeout
+            apply_payload(request, method: method, params: params, body: body, auth: auth)
+          end
+
           parse_response(response, path)
-        rescue *RETRYABLE_ERRORS => error
-          raise error if attempts > configuration.max_retries
-
-          sleep(configuration.retry_delay * attempts)
-          retry
         end
       end
 
-      def build_uri(path, params, base)
-        uri = URI.join(base_url_for(base), path)
-        query_pairs = URI.decode_www_form(uri.query.to_s) + encode_query(params)
-        uri.query = query_pairs.empty? ? nil : URI.encode_www_form(query_pairs)
-        uri
+      def apply_payload(request, method:, params:, body:, auth:)
+        request.params.update(encode_query(params)) unless params.empty?
+        return if method == :get && !auth
+
+        normalized_body = auth ? authenticated_body(request, body) : plain_body(request, body)
+        request.body = JSON.generate(Utils::Payload.stringify_keys(normalized_body)) unless normalized_body.empty?
       end
 
-      def build_http(uri)
-        Net::HTTP.start(
-          uri.host,
-          uri.port,
-          use_ssl: uri.scheme == "https",
-          open_timeout: configuration.open_timeout,
-          read_timeout: configuration.read_timeout
-        )
-      end
-
-      def build_request(method, uri, body, auth)
-        request_class = { get: Net::HTTP::Get, post: Net::HTTP::Post, delete: Net::HTTP::Delete }.fetch(method)
-        request = request_class.new(uri)
-        request["Accept"] = "application/json"
-        request["User-Agent"] = configuration.user_agent
-
-        return attach_authenticated_body(request, body) if auth
-        return request if method == :get || body.empty?
-
-        request["Content-Type"] = "application/json"
-        request.body = JSON.generate(Utils::Payload.stringify_keys(Utils::Payload.compact_hash(body)))
-        request
-      end
-
-      def attach_authenticated_body(request, body)
+      def authenticated_body(request, body)
         signer = Auth::Signer.new(api_key: fetch_api_key, api_secret: fetch_api_secret)
         normalized_body, headers = signer.authenticated_request(body)
-        request["Content-Type"] = "application/json"
-        headers.each { |header_name, value| request[header_name] = value }
-        request.body = JSON.generate(Utils::Payload.stringify_keys(normalized_body))
-        request
+        request.headers["Content-Type"] = "application/json"
+        headers.each { |header_name, value| request.headers[header_name] = value }
+        normalized_body
+      end
+
+      def plain_body(request, body)
+        normalized_body = Utils::Payload.compact_hash(body)
+        request.headers["Content-Type"] = "application/json"
+        normalized_body
       end
 
       def parse_response(response, path)
         parsed_body = parse_body(response.body)
-        return parsed_body if response.code.to_i.between?(200, 299)
+        status = response.status.to_i
+        return parsed_body if status.between?(200, 299)
 
-        error_class = response.code.to_i == 401 ? Errors::AuthenticationError : Errors::RequestError
-        raise error_class.new("CoinDCX request failed for #{path}", status: response.code.to_i, body: parsed_body)
+        logger.error("CoinDCX request failed path=#{path} status=#{status}")
+        raise classify_error(status, path, parsed_body)
+      end
+
+      def classify_error(status, path, body)
+        message = "CoinDCX request failed for #{path}"
+        return Errors::AuthError.new(message, status: status, body: body) if status == 401
+        return Errors::RateLimitError.new(message, status: status, body: body) if status == 429
+
+        Errors::RequestError.new(message, status: status, body: body)
       end
 
       def parse_body(body)
@@ -106,32 +104,34 @@ module CoinDCX
       end
 
       def encode_query(params)
-        Utils::Payload.compact_hash(params).each_with_object([]) do |(key, value), pairs|
-          if value.is_a?(Array)
-            value.each { |member| pairs << [key.to_s, member] }
-          else
-            pairs << [key.to_s, value]
-          end
+        Utils::Payload.compact_hash(params).each_with_object({}) do |(key, value), result|
+          result[key.to_s] = value
         end
       end
 
-      def base_url_for(base)
-        return configuration.api_base_url if base == :api
-        return configuration.public_base_url if base == :public
+      def connection_for(base)
+        @connections.fetch(base) do
+          raise Errors::ConfigurationError, "unknown base url: #{base.inspect}"
+        end
+      end
 
-        raise Errors::ConfigurationError, "unknown base url: #{base.inspect}"
+      def build_connection(base_url, stubs)
+        Faraday.new(url: base_url) do |connection|
+          connection.request :url_encoded
+          connection.adapter(stubs ? :test : Faraday.default_adapter, stubs)
+        end
       end
 
       def fetch_api_key
         return configuration.api_key if configuration.api_key
 
-        raise Errors::AuthenticationError, "api_key is required for authenticated endpoints"
+        raise Errors::AuthError, "api_key is required for authenticated endpoints"
       end
 
       def fetch_api_secret
         return configuration.api_secret if configuration.api_secret
 
-        raise Errors::AuthenticationError, "api_secret is required for authenticated endpoints"
+        raise Errors::AuthError, "api_secret is required for authenticated endpoints"
       end
     end
   end

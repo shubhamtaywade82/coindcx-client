@@ -3,6 +3,7 @@
 require_relative "coindcx/version"
 require_relative "coindcx/utils/payload"
 require_relative "coindcx/errors/base_error"
+require_relative "coindcx/logging/null_logger"
 require_relative "coindcx/contracts/channel_name"
 require_relative "coindcx/contracts/socket_backend"
 require_relative "coindcx/models/base_model"
@@ -13,6 +14,7 @@ end
 
 require_relative "coindcx/auth/signer"
 require_relative "coindcx/transport/rate_limit_registry"
+require_relative "coindcx/transport/retry_policy"
 require_relative "coindcx/transport/http_client"
 require_relative "coindcx/rest/base_resource"
 

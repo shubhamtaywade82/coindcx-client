@@ -20,8 +20,9 @@ module CoinDCX
 
     attr_accessor :api_key, :api_secret, :api_base_url, :public_base_url,
                   :socket_base_url, :open_timeout, :read_timeout, :max_retries,
-                  :retry_delay, :user_agent, :socket_io_backend_factory,
-                  :endpoint_rate_limits
+                  :retry_base_interval, :user_agent, :socket_io_backend_factory,
+                  :endpoint_rate_limits, :logger, :socket_reconnect_attempts,
+                  :socket_reconnect_interval
 
     def initialize
       @api_base_url = DEFAULT_API_BASE_URL
@@ -30,9 +31,12 @@ module CoinDCX
       @open_timeout = 5
       @read_timeout = 30
       @max_retries = 2
-      @retry_delay = 0.25
+      @retry_base_interval = 0.25
       @user_agent = DEFAULT_USER_AGENT
       @endpoint_rate_limits = DEFAULT_ENDPOINT_RATE_LIMITS.transform_values(&:dup)
+      @logger = nil
+      @socket_reconnect_attempts = 3
+      @socket_reconnect_interval = 1.0
     end
 
     def rate_limit_for(bucket_name)

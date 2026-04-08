@@ -14,5 +14,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = ">= 3.0"
   spec.files = Dir.chdir(__dir__) { Dir["README.md", "lib/**/*.rb", "spec/**/*.rb"] }
   spec.require_paths = ["lib"]
+  spec.add_dependency "faraday"
+  spec.add_dependency "socket.io-client-simple"
   spec.add_development_dependency "rspec"
 end

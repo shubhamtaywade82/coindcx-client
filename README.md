@@ -1,14 +1,15 @@
 # coindcx-client
 
-`coindcx-client` is a CoinDCX-specific Ruby gem scaffold that keeps the Delta-style layering without copying Delta's endpoint layout.
+`coindcx-client` is a CoinDCX-specific Ruby gem scaffold built from a layered exchange-client architecture rather than a thin wrapper.
 
 ## Design goals
 
 - keep transport, auth, resources, models, and websockets separate
 - model CoinDCX namespaces explicitly: public, spot, margin, user, transfers, and futures
-- keep typed models only for the payloads that benefit from a small facade
+- keep the gem stateless and leave strategy, position tracking, and risk logic to the host app
 - preserve CoinDCX websocket constraints instead of flattening them into a generic websocket abstraction
 - make rate limiting endpoint-aware for documented spot order endpoints
+- fail with structured errors that trading code can classify cleanly
 
 ## Structure
 
@@ -42,16 +43,25 @@ bundle install
 ## Configuration
 
 ```ruby
+require "logger"
 require "coindcx"
 
 CoinDCX.configure do |config|
   config.api_key = ENV.fetch("COINDCX_API_KEY")
   config.api_secret = ENV.fetch("COINDCX_API_SECRET")
-  config.socket_io_backend_factory = -> { MySocketIoBackend.new }
+  config.logger = Logger.new($stdout)
+
+  # HTTP retry tuning
+  config.max_retries = 2
+  config.retry_base_interval = 0.25
+
+  # Socket reconnect tuning
+  config.socket_reconnect_attempts = 3
+  config.socket_reconnect_interval = 1.0
 end
 ```
 
-The websocket backend must respond to `connect(url)`, `emit(event, payload)`, `on(event, &block)`, and `disconnect`.
+By default the websocket layer uses `socket.io-client-simple`. You can still override the backend with `socket_io_backend_factory` when you need a custom adapter.
 
 ## REST usage
 
@@ -85,7 +95,7 @@ client.futures.orders.list(status: "open", margin_currency_short_name: ["USDT"])
 
 ## Websocket usage
 
-CoinDCX documents Socket.io for websocket access. This gem keeps that boundary explicit.
+CoinDCX documents Socket.io for websocket access. This gem keeps that boundary explicit and reconnects using configurable retry settings.
 
 ```ruby
 client = CoinDCX.client
@@ -105,6 +115,15 @@ client.ws.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDA
 end
 ```
 
+## Error handling
+
+The transport raises structured errors so calling code can respond intentionally:
+
+- `CoinDCX::Errors::AuthError`
+- `CoinDCX::Errors::RateLimitError`
+- `CoinDCX::Errors::RequestError`
+- `CoinDCX::Errors::SocketConnectionError`
+
 ## Rate limiting
 
 `CoinDCX::Configuration` ships with the documented spot order limits as named buckets:
@@ -121,9 +140,26 @@ end
 
 Unknown endpoints are intentionally left unbucketed until their limits are confirmed.
 
+## Stateless boundary
+
+This gem is intentionally limited to:
+
+- API calls
+- signing
+- socket connection management
+- lightweight parsing and typed facades
+
+This gem intentionally does **not** own:
+
+- position tracking
+- order lifecycle orchestration outside the API response shape
+- strategy logic
+- risk management
+- application caching
+
 ## Notes
 
 - spot market data stays under `rest/public`
 - futures market data lives under `rest/futures`, even when it uses public hosts
 - websocket order book parsing is snapshot-oriented and preserves CoinDCX's "up to 50 recent orders" constraint
-- the websocket layer refuses to masquerade as a plain websocket client
+- the websocket layer uses Socket.io and does not masquerade as a plain websocket client
