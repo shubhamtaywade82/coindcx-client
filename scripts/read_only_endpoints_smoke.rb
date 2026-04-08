@@ -7,6 +7,10 @@
 # Usage (from repository root):
 #   bundle exec ruby scripts/read_only_endpoints_smoke.rb
 #
+# If `bundle exec` prints Gem::Platform "already initialized constant" warnings (often with RVM +
+# an older Bundler), they come from Bundler before this file loads. They are harmless. To hide them:
+#   RUBYOPT=-W0 bundle exec ruby scripts/read_only_endpoints_smoke.rb
+#
 # Credentials: set COINDCX_API_KEY and COINDCX_API_SECRET in the environment, or define
 # them in a .env file next to this script's parent directory (repository root).
 #
@@ -19,6 +23,8 @@
 require "logger"
 require "time"
 require_relative "../lib/coindcx"
+
+$stdout.sync = true
 
 class ReadOnlyEndpointsSmoke
   DEFAULT_PAIR = "B-BTC_USDT"
