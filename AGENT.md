@@ -1,392 +1,352 @@
-# AGENT.md — CoinDCX Ruby Client (coindcx-client)
+# AGENT.md — CoinDCX Client (Pattern-Enforced Architecture)
 
-## 1. Purpose
+## 1. Design Philosophy
 
-Build a production-grade Ruby client gem for CoinDCX that:
+- patterns are tools, not goals
+- each pattern must solve a real constraint
+- zero speculative abstraction
 
-- fully supports REST + Socket.io APIs
-- is deterministic, testable, and failure-safe
-- is suitable for live trading integration
-- strictly separates transport from trading logic
+## 2. Approved Design Patterns (STRICT)
 
-This gem is **NOT** a trading system.
+Only these patterns are allowed.
 
-## 2. Non-Negotiable Constraints
+| Pattern | Mandatory | Reason |
+| --- | --- | --- |
+| Factory | yes | resource/client creation |
+| Strategy | yes | auth + retry + rate limit |
+| Adapter | yes | HTTP + Socket.io isolation |
+| Observer | yes | WebSocket event system |
+| Command | yes | order execution encapsulation |
+| Template Method | yes | REST execution pipeline |
+| Builder | yes | request construction |
+| Decorator | yes | logging + retry wrapping |
+| Singleton | limited | config only |
+| Facade | yes | client interface |
+| State | limited | WS only, connection lifecycle |
 
-### 2.1 Architecture Boundary
+Everything else -> reject.
 
-| Layer | Responsibility |
-| --- | --- |
-| Gem | API communication only |
-| AlgoTradingApi | strategy, execution, risk |
+## 3. Pattern Mapping to System
 
-Violation = reject PR.
+### 3.1 Facade Pattern -> Client
 
-### 2.2 No Hidden State
+Purpose:
 
-- No caching
-- No position tracking
-- No strategy logic
-- No global mutable state
+- expose clean interface
+- `client.public.markets`
+- `client.spot.place_order(...)`
+- `client.ws.subscribe(...)`
 
-All state must be:
-
-- explicit
-- injectable
-- testable
-
-### 2.3 Socket Implementation Constraint
-
-CoinDCX uses Socket.io, not raw WebSocket.
-
-Rules:
-
-- Do NOT use faye-websocket
-- Do NOT reuse Dhan WebSocket logic
-- MUST use Socket.io-compatible client
-
-If this is wrong -> system unusable.
-
-### 2.4 Determinism
-
-All methods must be:
-
-- side-effect predictable
-- retry-safe
-- idempotent where applicable
-
-## 3. Architecture
-
-Reference baseline: delta_exchange gem
-
-### 3.1 Directory Structure
-
-```
-lib/
-  coindcx.rb
-  coindcx/version.rb
-  coindcx/configuration.rb
-
-  coindcx/client.rb
-
-  coindcx/transport/
-    http_client.rb
-
-  coindcx/auth/
-    signer.rb
-
-  coindcx/rest/
-    public/
-    spot/
-    futures/
-    users/
-
-  coindcx/ws/
-    client.rb
-    connection_manager.rb
-    channels/
-    handlers/
-
-  coindcx/errors/
-  coindcx/contracts/
-  coindcx/utils/
-```
-
-## 4. Core Components
-
-### 4.1 Client (Entry Point)
+Implementation:
 
 ```ruby
-Coindcx::Client.new(
-  api_key:,
-  secret:,
-  logger:,
-  timeout:
-)
+module Coindcx
+  class Client
+    def public
+      @public ||= Rest::Public::Facade.new(http_client)
+    end
+
+    def spot
+      @spot ||= Rest::Spot::Facade.new(http_client)
+    end
+
+    def ws
+      @ws ||= Ws::Facade.new(ws_client)
+    end
+  end
+end
 ```
 
-Responsibilities:
+### 3.2 Factory Pattern -> Resource Creation
+
+Purpose:
+
+- decouple instantiation
+
+```ruby
+module Coindcx
+  class ResourceFactory
+    def self.build(type, client)
+      case type
+      when :markets then Rest::Public::Markets.new(client)
+      when :orders  then Rest::Spot::Orders.new(client)
+      else raise "Unknown resource"
+      end
+    end
+  end
+end
+```
+
+### 3.3 Strategy Pattern -> Auth / Retry / RateLimit
+
+Purpose:
+
+- swap runtime behavior without branching chaos
+
+Auth Strategy:
+
+```ruby
+class HmacAuthStrategy
+  def sign(payload, secret)
+    OpenSSL::HMAC.hexdigest('SHA256', secret, payload.to_json)
+  end
+end
+```
+
+Retry Strategy:
+
+```ruby
+class ExponentialBackoffStrategy
+  def execute
+    retries = 0
+    begin
+      yield
+    rescue => e
+      raise if retries >= 3
+      sleep(2 ** retries)
+      retries += 1
+      retry
+    end
+  end
+end
+```
+
+### 3.4 Adapter Pattern -> HTTP + Socket.io
+
+Purpose:
+
+- shield external libraries
+
+HTTP Adapter:
+
+```ruby
+class FaradayAdapter
+  def call(method, url, payload, headers)
+    Faraday.public_send(method, url) do |req|
+      req.headers = headers
+      req.body = payload.to_json if method == :post
+    end
+  end
+end
+```
+
+Socket Adapter:
+
+```ruby
+class SocketIoAdapter
+  def initialize(url)
+    @socket = SocketIO::Client::Simple.connect(url)
+  end
+
+  def emit(event, payload)
+    @socket.emit(event, payload)
+  end
+
+  def on(event, &block)
+    @socket.on(event, &block)
+  end
+end
+```
+
+### 3.5 Observer Pattern -> WebSocket Events (CRITICAL)
+
+Reference: Observer Pattern Ruby example
+
+Purpose:
+
+- event-driven system (mandatory for trading)
+
+Subject:
+
+```ruby
+module Coindcx
+  module Ws
+    class EventBus
+      def initialize
+        @listeners = {}
+      end
+
+      def subscribe(event, listener)
+        @listeners[event] ||= []
+        @listeners[event] << listener
+      end
+
+      def publish(event, data)
+        (@listeners[event] || []).each do |listener|
+          listener.call(data)
+        end
+      end
+    end
+  end
+end
+```
+
+Usage:
+
+```ruby
+event_bus.subscribe(:ltp_update, ->(data) {
+  puts data
+})
+
+event_bus.publish(:ltp_update, payload)
+```
+
+### 3.6 Command Pattern -> Order Execution
+
+Purpose:
+
+- encapsulate actions (important for retries + audit)
+
+```ruby
+class PlaceOrderCommand
+  def initialize(client, params)
+    @client = client
+    @params = params
+  end
+
+  def execute
+    @client.post("/orders", @params)
+  end
+end
+```
+
+### 3.7 Template Method -> HTTP Pipeline
+
+Purpose:
+
+- standardize request flow
+
+```ruby
+class BaseRequest
+  def execute
+    validate
+    payload = build_payload
+    signed = sign(payload)
+    response = send_request(signed)
+    parse(response)
+  end
 
-- compose dependencies
-- expose resource accessors
-- no business logic
+  def validate; end
+  def build_payload; end
+  def sign(payload); payload; end
+  def send_request(payload); end
+  def parse(response); end
+end
+```
 
-### 4.2 Transport Layer
+### 3.8 Builder Pattern -> Request Construction
 
-Responsibilities:
+Purpose:
 
-- HTTP execution
-- retries
-- rate limiting
-- error normalization
+- avoid hash chaos
 
-Rules:
+```ruby
+class OrderBuilder
+  def initialize
+    @params = {}
+  end
 
-- no endpoint-specific logic
-- no parsing beyond JSON
+  def symbol(val); @params[:symbol] = val; self; end
+  def side(val); @params[:side] = val; self; end
+  def quantity(val); @params[:quantity] = val; self; end
 
-### 4.3 Auth Layer
+  def build
+    raise "Missing fields" unless @params[:symbol]
+    @params
+  end
+end
+```
 
-CoinDCX uses HMAC SHA256.
+### 3.9 Decorator Pattern -> Logging / Retry
 
-Requirements:
+Purpose:
 
-- deterministic signature generation
-- timestamp injection
-- payload canonicalization
+- add behavior without modifying core
 
-### 4.4 REST Resources
+```ruby
+class LoggingDecorator
+  def initialize(client, logger)
+    @client = client
+    @logger = logger
+  end
 
-Each resource maps 1:1 to API group.
+  def call(*args)
+    start = Time.now
+    result = @client.call(*args)
+    @logger.info("Latency: #{Time.now - start}")
+    result
+  end
+end
+```
 
-Example:
+### 3.10 State Pattern -> WebSocket Lifecycle
 
-- `client.public.markets`
-- `client.spot.orders`
-- `client.futures.positions`
+Purpose:
 
-Rules:
+- handle connection transitions cleanly
 
-- no orchestration
-- no retries (handled in transport)
-- no cross-resource calls
+```ruby
+class ConnectedState
+  def handle(context)
+    # active
+  end
+end
 
-### 4.5 WebSocket Layer
+class ReconnectingState
+  def handle(context)
+    context.reconnect
+  end
+end
+```
 
-| Component | Responsibility |
-| --- | --- |
-| Client | connection |
-| ConnectionManager | reconnect logic |
-| Channels | subscription contracts |
-| Handlers | message parsing |
+## 4. Pattern Anti-Abuse Rules
 
-### 4.6 Models (Optional)
+Reject if:
 
-Only introduce if:
+- pattern used without clear constraint
+- multiple patterns solving same problem
+- inheritance chains > 2 levels
+- over-engineered builders for simple calls
 
-- parsing complexity exists
-- domain invariants required
+## 5. Critical Integration Insight
 
-Otherwise return raw hashes.
+Where Observer connects to your system:
 
-## 5. Error Handling
+- `CoinDCX WS -> EventBus -> AlgoTradingApi -> Exit Engine`
 
-All errors must be normalized.
+This is how you replicate:
 
-- `Coindcx::Errors::ApiError`
-- `Coindcx::Errors::AuthError`
-- `Coindcx::Errors::RateLimitError`
-- `Coindcx::Errors::NetworkError`
+- Dhan WebSocket feed
+- ActiveCache updates
+- real-time exit logic
 
-Rules:
+## 6. What NOT to implement (explicit)
 
-- no raw Faraday errors leak
-- no silent failures
-- always include:
-  - `request_id` (if available)
-  - `endpoint`
-  - `payload`
+- Repository pattern (no DB)
+- Service layer (anti-pattern for this gem)
+- CQRS (overkill)
+- Event sourcing (belongs to trading system)
+- ActiveRecord-style models
 
-## 6. Rate Limiting
+## 7. Final Enforcement Rule
 
-Mandatory.
+> Every pattern must map to a production failure mode.
 
-CoinDCX has endpoint-specific limits.
+If it doesn't: -> remove it.
 
-Implementation requirements:
+## 8. Next Step
 
-- token bucket or sliding window
-- per-endpoint configuration
-- blocking throttle (NOT async drop)
+If proceeding correctly, the next move is:
 
-## 7. Retry Strategy
+- bootstrap with patterns wired from day 1
 
-Only retry when:
+I can generate:
 
-- network failure
-- 5xx errors
-- rate limit (with delay)
+- full gem scaffold
+- all patterns pre-wired
+- working REST + WS base
+- RSpec coverage
 
-Never retry:
+Say:
 
-- auth failure
-- validation errors
-- 4xx (except 429)
-
-## 8. Logging
-
-Required fields:
-
-- endpoint
-- latency
-- status
-- retry_count
-
-Rules:
-
-- no sensitive data (API keys, signatures)
-- structured logging preferred
-
-## 9. WebSocket Design
-
-### 9.1 Connection Manager
-
-Must handle:
-
-- reconnect with backoff
-- resubscription
-- auth re-init
-
-### 9.2 Message Handling
-
-- parse once
-- emit normalized payload
-- no business logic
-
-### 9.3 Failure Handling
-
-- disconnect -> reconnect
-- stale connection -> reset
-- auth failure -> fail fast
-
-## 10. Contracts (Validation)
-
-Use strict validation for:
-
-- order placement
-- required params
-- enum values
-
-Fail early.
-
-## 11. Testing Strategy
-
-### 11.1 RSpec Coverage
-
-Minimum:
-
-- 90% coverage
-- all public methods tested
-
-### 11.2 Test Types
-
-| Type | Tool |
-| --- | --- |
-| Unit | RSpec |
-| HTTP | WebMock |
-| WS | mock socket |
-| Integration | optional |
-
-### 11.3 Required Cases
-
-- success
-- API error
-- network failure
-- retry behavior
-- rate limit
-
-## 12. Forbidden Patterns
-
-- service objects inside gem
-- global singletons
-- silent rescue
-- implicit retries
-- mixing REST + WS logic
-- trading logic inside gem
-
-## 13. Extension Rules
-
-Adding new endpoints:
-
-1. create resource class
-2. add method
-3. add contract (if needed)
-4. add tests
-5. do not modify transport unless required
-
-## 14. Integration Contract (with AlgoTradingApi)
-
-Gem returns:
-
-- raw or normalized API data
-
-Rails app handles:
-
-- signals
-- entries
-- exits
-- SL/TP logic
-- risk
-
-## 15. Definition of Done
-
-Feature is complete only if:
-
-- [ ] API call works against real endpoint
-- [ ] RSpec coverage added
-- [ ] failure scenarios tested
-- [ ] logging present
-- [ ] no architectural violation
-
-## 16. Initial Milestones
-
-### Phase 1
-
-- HTTP client
-- auth
-- public endpoints
-
-### Phase 2
-
-- private REST (orders, balances)
-
-### Phase 3
-
-- WebSocket (public)
-
-### Phase 4
-
-- WebSocket (private)
-
-### Phase 5
-
-- resilience (retry, reconnect)
-
-## 17. Critical Risks
-
-1. Socket.io mismatch  
-   Wrong implementation -> entire system breaks
-2. Rate limits ignored  
-   -> API bans
-3. Silent failures  
-   -> trading losses
-4. Over-abstraction  
-   -> slow development + brittle code
-
-## 18. Review Checklist (PR Gate)
-
-Reject PR if:
-
-- architecture violated
-- missing tests
-- hidden state introduced
-- WS implemented incorrectly
-- retries not controlled
-
-## 19. Naming Conventions
-
-- `Coindcx::Rest::Public::Markets`
-- `Coindcx::Ws::Client`
-- `Coindcx::Transport::HttpClient`
-
-Consistency required.
-
-## 20. Final Principle
-
-> This gem is an execution-grade API client, not a framework.
-
-- minimal
-- predictable
-- robust
-
-Everything else belongs outside.
+`bootstrap pattern gem`
