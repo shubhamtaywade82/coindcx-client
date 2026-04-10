@@ -8,8 +8,7 @@ module CoinDCX
         :channel_name,
         :event_name,
         :payload_builder,
-        :delivery_mode,
-        keyword_init: true
+        :delivery_mode
       ) do
         def payload
           payload_builder.call

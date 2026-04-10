@@ -44,8 +44,8 @@ RSpec.describe CoinDCX::REST::Futures::Positions do
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/transactions', body: {}, auth: true,
                                                                                                                 base: :api, bucket: :futures_positions_transactions)
     expect(http_client).to have_received(:get).with('/exchange/v1/derivatives/futures/positions/cross_margin_details', params: {}, body: {},
-                                                                                                                    auth: true, base: :api,
-                                                                                                                    bucket: :futures_positions_cross_margin_details)
+                                                    auth: true, base: :api,
+                                                    bucket: :futures_positions_cross_margin_details)
     expect(http_client).to have_received(:post).with('/exchange/v1/derivatives/futures/positions/margin_type', body: { id: '1' },
                                                                                                                auth: true, base: :api, bucket: :futures_positions_margin_type)
   end

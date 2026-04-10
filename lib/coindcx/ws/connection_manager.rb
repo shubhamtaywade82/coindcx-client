@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "json"
-require "set"
 
 module CoinDCX
   module WS
@@ -68,9 +67,7 @@ module CoinDCX
           delivery_mode: delivery_mode
         )
         register_event_bridge(event_name) if state.connected?
-        if state.connected? && @engine_io_open
-          emit_join(subscription_for(type: type, channel_name: channel_name, event_name: event_name))
-        end
+        emit_join(subscription_for(type: type, channel_name: channel_name, event_name: event_name)) if state.connected? && @engine_io_open
         transition_to(:subscribed) if state.connected? && subscriptions.any?
         self
       end
@@ -85,7 +82,8 @@ module CoinDCX
       private
 
       attr_reader :configuration, :backend, :logger, :sleeper, :thread_factory,
-                  :monotonic_clock, :randomizer, :state, :subscriptions, :handlers, :mutex
+                  :monotonic_clock, :randomizer, :state, :subscriptions, :handlers, :mutex,
+                  :registered_event_names
 
       def connect_with_retries
         attempts = 0
@@ -93,7 +91,7 @@ module CoinDCX
         begin
           attempts += 1
           establish_connection
-        rescue Errors::SocketAuthenticationError => error
+        rescue Errors::SocketAuthenticationError => e
           transition_to(:failed)
           log(
             :error,
@@ -101,13 +99,13 @@ module CoinDCX
             endpoint: configuration.socket_base_url,
             retries: attempts - 1,
             latency: nil,
-            error_class: error.class.name,
-            message: error.message,
+            error_class: e.class.name,
+            message: e.message,
             subscription_count: subscriptions.count
           )
-          raise error
-        rescue Errors::SocketConnectionError => error
-          handle_reconnect_failure(attempts, error)
+          raise e
+        rescue Errors::SocketConnectionError => e
+          handle_reconnect_failure(attempts, e)
           retry
         end
       end
@@ -155,7 +153,7 @@ module CoinDCX
       end
 
       def reconnect
-        return unless begin_reconnect
+        return unless begin_reconnect?
 
         transition_to(:reconnecting)
         stop_heartbeat
@@ -166,7 +164,7 @@ module CoinDCX
         finish_reconnect
       end
 
-      def begin_reconnect
+      def begin_reconnect?
         mutex.synchronize do
           return false if @reconnecting
 
@@ -187,9 +185,9 @@ module CoinDCX
       def emit_join(subscription)
         payload = subscription.payload
         backend.emit("join", payload)
-      rescue Errors::AuthError => error
+      rescue Errors::AuthError => e
         raise Errors::SocketAuthenticationError,
-              "private websocket authentication failed for #{subscription.channel_name}: #{error.message}"
+              "private websocket authentication failed for #{subscription.channel_name}: #{e.message}"
       end
 
       def register_event_bridge(event_name)
@@ -213,7 +211,7 @@ module CoinDCX
         return nil if parts.empty?
         return parts.first if parts.size == 1
 
-        hashes = parts.select { |p| p.is_a?(Hash) }
+        hashes = parts.grep(Hash)
         return hashes.reduce { |acc, h| acc.merge(h) } if hashes.size > 1
         return hashes.first if hashes.size == 1
 
@@ -246,15 +244,15 @@ module CoinDCX
       def dispatch(event_name, payload)
         handlers.fetch(event_name, []).each do |handler|
           handler.call(payload)
-        rescue StandardError => error
+        rescue StandardError => e
           log(
             :error,
             event: "ws_handler_error",
             endpoint: event_name,
             retries: 0,
             latency: nil,
-            error_class: error.class.name,
-            message: error.message
+            error_class: e.class.name,
+            message: e.message
           )
         end
       end
@@ -278,15 +276,15 @@ module CoinDCX
 
           check_liveness!
         end
-      rescue StandardError => error
+      rescue StandardError => e
         log(
           :error,
           event: "ws_heartbeat_failed",
           endpoint: configuration.socket_base_url,
           retries: 0,
           latency: nil,
-          error_class: error.class.name,
-          message: error.message
+          error_class: e.class.name,
+          message: e.message
         )
       end
 
@@ -397,15 +395,11 @@ module CoinDCX
       def subscription_for(type:, channel_name:, event_name:)
         subscriptions.each do |subscription|
           return subscription if subscription.type == type &&
-                                subscription.channel_name == channel_name &&
-                                subscription.event_name == event_name
+                                 subscription.channel_name == channel_name &&
+                                 subscription.event_name == event_name
         end
 
         raise Errors::SocketStateError, "subscription intent not registered for #{event_name}"
-      end
-
-      def registered_event_names
-        @registered_event_names
       end
 
       def log(level, payload)

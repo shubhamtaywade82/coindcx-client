@@ -55,7 +55,7 @@ module CoinDCX
         @sleeper.sleep(sleep_interval)
       end
 
-      def retry_sleep_interval(attempts, error, policy)
+      def retry_sleep_interval(attempts, error, _policy)
         return error.retry_after.to_f if error.respond_to?(:retry_after) && error.retry_after.to_f.positive?
 
         @base_interval * (2**(attempts - 1))

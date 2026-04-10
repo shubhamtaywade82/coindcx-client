@@ -8,13 +8,13 @@ module CoinDCX
       # Allowed forward-transitions for each state.  Any transition not listed here
       # is a programming error and will raise +SocketStateError+.
       VALID_TRANSITIONS = {
-        disconnected:  %i[connecting reconnecting],
-        connecting:    %i[authenticated failed reconnecting stopping],
+        disconnected: %i[connecting reconnecting],
+        connecting: %i[authenticated failed reconnecting stopping],
         authenticated: %i[subscribed reconnecting stopping disconnected],
-        subscribed:    %i[reconnecting stopping authenticated disconnected],
-        reconnecting:  %i[authenticated subscribed failed stopping disconnected],
-        failed:        %i[connecting stopping disconnected],
-        stopping:      %i[disconnected]
+        subscribed: %i[reconnecting stopping authenticated disconnected],
+        reconnecting: %i[authenticated subscribed failed stopping disconnected],
+        failed: %i[connecting stopping disconnected],
+        stopping: %i[disconnected]
       }.freeze
 
       def initialize

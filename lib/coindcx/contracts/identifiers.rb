@@ -3,9 +3,9 @@
 module CoinDCX
   module Contracts
     module Identifiers
-      MARKET_PATTERN = /\A[A-Z0-9]+\z/.freeze
-      PAIR_PATTERN = /\A[A-Z]+-[A-Z0-9]+_[A-Z0-9]+\z/.freeze
-      CURRENCY_PATTERN = /\A[A-Z0-9]+\z/.freeze
+      MARKET_PATTERN = /\A[A-Z0-9]+\z/
+      PAIR_PATTERN = /\A[A-Z]+-[A-Z0-9]+_[A-Z0-9]+\z/
+      CURRENCY_PATTERN = /\A[A-Z0-9]+\z/
 
       module_function
 

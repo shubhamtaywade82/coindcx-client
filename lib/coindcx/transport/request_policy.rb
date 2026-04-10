@@ -35,7 +35,7 @@ module CoinDCX
           operation_name: operation_name_for(method: method, path: path),
           retry_budget: retry_budget_for(configuration: configuration, method: method, path: path, body: body, auth: auth),
           circuit_breaker_key: circuit_breaker_key_for(path: path),
-          retry_rate_limits: retry_rate_limits_for(method: method, path: path),
+          retry_rate_limits: retry_rate_limits_for?(method: method, path: path),
           bucket: bucket
         )
       end
@@ -59,7 +59,7 @@ module CoinDCX
         nil
       end
 
-      def self.retry_rate_limits_for(method:, path:)
+      def self.retry_rate_limits_for?(method:, path:)
         method == :get || READ_ONLY_POST_PATHS.include?(path)
       end
 

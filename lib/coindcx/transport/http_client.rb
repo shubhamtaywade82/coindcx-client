@@ -217,7 +217,9 @@ module CoinDCX
 
       def error_details_for(status:, headers:, policy:)
         return [Errors::AuthError, :auth, false] if status == 401
-        return [Errors::RetryableRateLimitError, :rate_limit, true] if status == 429 && policy.retryable_response?(status: status, headers: headers)
+        if status == 429 && policy.retryable_response?(status: status, headers: headers)
+          return [Errors::RetryableRateLimitError, :rate_limit, true]
+        end
         return [Errors::RateLimitError, :rate_limit, false] if status == 429
         return [Errors::UpstreamServerError, :upstream, policy.retryable_response?(status: status, headers: headers)] if status >= 500
         return [Errors::RemoteValidationError, :validation, false] if policy.validation_status?(status)

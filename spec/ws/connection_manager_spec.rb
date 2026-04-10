@@ -263,7 +263,7 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
 
   describe "reconnect backoff" do
     it "applies exponential backoff bounded by MAX_BACKOFF_INTERVAL with zero jitter" do
-      base = configuration.socket_reconnect_interval  # 0.01
+      base = configuration.socket_reconnect_interval # 0.01
 
       # attempts 1..3 → intervals 0.01, 0.02, 0.04 (well under ceiling)
       expect(manager.send(:reconnect_interval, 1)).to eq(base * 1)
@@ -280,7 +280,7 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
     end
 
     it "adds jitter proportional to the base interval" do
-      jitter_randomizer = -> { 1.0 }  # max jitter: base * 0.25
+      jitter_randomizer = -> { 1.0 } # max jitter: base * 0.25
       jittery_manager = described_class.new(
         configuration: configuration,
         backend: backend,
@@ -318,7 +318,7 @@ RSpec.describe CoinDCX::WS::ConnectionManager do
 
     it "raises SocketStateError when the transition map is violated" do
       state = CoinDCX::WS::ConnectionState.new
-      state.transition_to(:connecting)   # disconnected → connecting ✓
+      state.transition_to(:connecting) # disconnected → connecting ✓
       state.transition_to(:authenticated) # connecting → authenticated ✓
 
       expect do

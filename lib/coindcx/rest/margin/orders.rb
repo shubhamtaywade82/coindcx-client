@@ -6,7 +6,10 @@ module CoinDCX
       class Orders < BaseResource
         def create(attributes)
           validated_attributes = Contracts::OrderRequest.validate_margin_create!(attributes)
-          build_model(Models::Order, post("/exchange/v1/margin/create", auth: true, bucket: :margin_create_order, body: validated_attributes))
+          build_model(
+            Models::Order,
+            post("/exchange/v1/margin/create", auth: true, bucket: :margin_create_order, body: validated_attributes)
+          )
         end
 
         def list(attributes = {})

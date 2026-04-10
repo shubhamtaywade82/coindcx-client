@@ -1,40 +1,40 @@
- # frozen_string_literal: true
+# frozen_string_literal: true
 
- module CoinDCX
-   module Transport
-     module ResponseNormalizer
-       module_function
+module CoinDCX
+  module Transport
+    module ResponseNormalizer
+      module_function
 
-       def success(data)
-         {
-           success: true,
-           data: data,
-           error: nil
-         }
-       end
+      def success(data)
+        {
+          success: true,
+          data: data,
+          error: nil
+        }
+      end
 
       def failure(status:, body:, fallback_message:, category:, request_context:, retryable:)
-         normalized_body = normalize_body(body)
+        normalized_body = normalize_body(body)
 
-         {
-           success: false,
-           data: {},
-           error: {
+        {
+          success: false,
+          data: {},
+          error: {
             category: category,
-             code: normalized_body[:code] || status,
+            code: normalized_body[:code] || status,
             message: normalized_body[:message] || normalized_body[:error] || fallback_message,
             request_context: request_context,
             retryable: retryable
-           }
-         }
-       end
+          }
+        }
+      end
 
-       def normalize_body(body)
-         return Utils::Payload.symbolize_keys(body) if body.is_a?(Hash)
-         return { message: body } if body.is_a?(String)
+      def normalize_body(body)
+        return Utils::Payload.symbolize_keys(body) if body.is_a?(Hash)
+        return { message: body } if body.is_a?(String)
 
-         {}
-       end
-     end
-   end
- end
+        {}
+      end
+    end
+  end
+end

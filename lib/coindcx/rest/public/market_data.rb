@@ -19,8 +19,12 @@ module CoinDCX
         def list_trades(pair:, limit: nil)
           build_models(
             Models::Trade,
-            get("/market_data/trade_history", base: :public, bucket: :public_trades,
-                params: { pair: pair, limit: limit })
+            get(
+              "/market_data/trade_history",
+              base: :public,
+              bucket: :public_trades,
+              params: { pair: pair, limit: limit }
+            )
           )
         end
 

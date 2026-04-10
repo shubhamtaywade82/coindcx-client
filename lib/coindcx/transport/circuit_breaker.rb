@@ -17,9 +17,9 @@ module CoinDCX
         raise open_error(key, request_context) if open?(key)
 
         yield.tap { record_success(key) }
-      rescue Errors::TransportError, Errors::UpstreamServerError, Errors::RetryableRateLimitError => error
+      rescue Errors::TransportError, Errors::UpstreamServerError, Errors::RetryableRateLimitError => e
         record_failure(key)
-        raise error
+        raise e
       end
 
       private
