@@ -38,6 +38,8 @@ module CoinDCX
           retry_budget: retry_budget_for(configuration: configuration, method: method, path: path, body: body, auth: auth),
           circuit_breaker_key: circuit_breaker_key_for(path: path),
           retry_rate_limits: retry_rate_limits_for?(method: method, path: path),
+          requires_idempotency: ORDER_CREATE_PATHS.include?(path),
+          idempotency_satisfied: idempotency_contract_met?(path: path, body: body),
           bucket: bucket
         )
       end
@@ -50,7 +52,8 @@ module CoinDCX
       def self.retry_budget_for(configuration:, method:, path:, body:, auth:)
         return configuration.market_data_retry_budget if method == :get && !auth
         return configuration.private_read_retry_budget if READ_ONLY_POST_PATHS.include?(path)
-        return configuration.idempotent_order_retry_budget if ORDER_CREATE_PATHS.include?(path) && idempotency_key_present?(body)
+        return configuration.idempotent_order_retry_budget if ORDER_CREATE_PATHS.include?(path) && idempotency_contract_met?(path: path,
+                                                                                                                             body: body)
 
         0
       end
@@ -78,11 +81,33 @@ module CoinDCX
         end
       end
 
-      def initialize(operation_name:, retry_budget:, circuit_breaker_key:, retry_rate_limits:, bucket:)
+      def self.idempotency_contract_met?(path:, body:)
+        return false unless ORDER_CREATE_PATHS.include?(path)
+
+        if path == "/exchange/v1/orders/create_multiple"
+          orders = extract_orders(body)
+          return false if orders.empty?
+
+          return orders.all? { |order| idempotency_key_present?(order) }
+        end
+
+        idempotency_key_present?(body)
+      end
+
+      def self.extract_orders(body)
+        return [] unless body.is_a?(Hash)
+
+        body[:orders] || body["orders"] || []
+      end
+
+      def initialize(operation_name:, retry_budget:, circuit_breaker_key:, retry_rate_limits:, requires_idempotency:,
+                     idempotency_satisfied:, bucket:)
         @operation_name = operation_name
         @retry_budget = retry_budget
         @circuit_breaker_key = circuit_breaker_key
         @retry_rate_limits = retry_rate_limits
+        @requires_idempotency = requires_idempotency
+        @idempotency_satisfied = idempotency_satisfied
         @bucket = bucket
       end
 
@@ -111,6 +136,14 @@ module CoinDCX
 
       def critical_order?
         !circuit_breaker_key.nil?
+      end
+
+      def requires_idempotency?
+        @requires_idempotency
+      end
+
+      def idempotency_satisfied?
+        @idempotency_satisfied
       end
     end
   end
