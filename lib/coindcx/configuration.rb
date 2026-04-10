@@ -8,6 +8,12 @@ module CoinDCX
     DEFAULT_USER_AGENT = "coindcx-client/#{VERSION}".freeze
     DEFAULT_PRIVATE_RATE_LIMIT = { limit: 60, period: 60 }.freeze
     DEFAULT_ENDPOINT_RATE_LIMITS = {
+      # Public (unauthenticated) endpoints — shared bucket keeps burst bursts off the exchange.
+      public_market_data: { limit: 30, period: 1 },
+      public_ticker:      { limit: 10, period: 1 },
+      public_order_book:  { limit: 10, period: 1 },
+      public_trades:      { limit: 10, period: 1 },
+      public_candles:     { limit: 10, period: 1 },
       spot_create_order_multiple: { limit: 2000, period: 60 },
       spot_create_order: { limit: 2000, period: 60 },
       spot_cancel_all: { limit: 30, period: 60 },

@@ -121,7 +121,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
       expect(second_payload.fetch("authSignature")).to end_with("-renewed")
     end
 
-    it "does not reconnect a quiet private subscription" do
+    it "does not reconnect a private subscription still within the liveness window" do
       now = 100.0
       handlers = {}
       clock = -> { now }
@@ -141,8 +141,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
       handlers.fetch(:connect).call
       client.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT)
 
-      # Past heartbeat interval but still under liveness timeout — private feeds skip heartbeat-driven
-      # reconnect, and the socket should still read as alive.
+      # Advance clock but stay inside the liveness timeout — no reconnect expected.
       now += 0.5
       client.send(:connection_manager).send(:check_liveness!)
 
@@ -165,7 +164,8 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         configuration: configuration,
         backend: backend,
         sleeper: sleeper,
-        thread_factory: thread_factory_without_run
+        thread_factory: thread_factory_without_run,
+        randomizer: -> { 0.0 }  # zero jitter → deterministic sleep value
       )
       client.connect
 

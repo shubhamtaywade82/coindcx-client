@@ -3,7 +3,7 @@
 module CoinDCX
   module WS
     class SocketIOClient
-      def initialize(configuration:, backend: nil, sleeper: Kernel, thread_factory: nil, monotonic_clock: nil)
+      def initialize(configuration:, backend: nil, sleeper: Kernel, thread_factory: nil, monotonic_clock: nil, randomizer: nil)
         @configuration = configuration
         @logger = configuration.logger || Logging::NullLogger.new
         @backend = Contracts::SocketBackend.validate!(backend || build_backend)
@@ -14,7 +14,8 @@ module CoinDCX
           logger: @logger,
           sleeper: sleeper,
           thread_factory: thread_factory,
-          monotonic_clock: monotonic_clock
+          monotonic_clock: monotonic_clock,
+          randomizer: randomizer
         )
       end
 
