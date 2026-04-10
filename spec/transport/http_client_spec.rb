@@ -57,7 +57,7 @@ RSpec.describe CoinDCX::Transport::HttpClient do
           "/exchange/v1/orders/create",
           auth: true,
           bucket: :spot_create_order,
-          body: { market: "SNTBTC" }
+          body: { market: "SNTBTC", client_order_id: "spot-create-1" }
         )
 
         expect(response_body).to eq("id" => "123")
@@ -84,7 +84,7 @@ RSpec.describe CoinDCX::Transport::HttpClient do
             "/exchange/v1/orders/create",
             auth: true,
             bucket: :spot_create_order,
-            body: { market: "SNTBTC" }
+            body: { market: "SNTBTC", client_order_id: "spot-create-2" }
           )
         end
 
@@ -154,14 +154,8 @@ RSpec.describe CoinDCX::Transport::HttpClient do
       end
     end
 
-    context "when an order create request times out without an idempotency key" do
-      it "does not retry the request" do
-        attempts = 0
-        stubs.post("/exchange/v1/orders/create") do
-          attempts += 1
-          raise Faraday::TimeoutError, "timed out"
-        end
-
+    context "when an order create request does not include client_order_id" do
+      it "rejects the request before transport execution" do
         expect do
           http_client.post(
             "/exchange/v1/orders/create",
@@ -169,13 +163,7 @@ RSpec.describe CoinDCX::Transport::HttpClient do
             bucket: :spot_create_order,
             body: { market: "SNTBTC" }
           )
-        end.to raise_error(
-          CoinDCX::Errors::TransportError,
-          %r{CoinDCX transport failed for /exchange/v1/orders/create}
-        )
-
-        expect(attempts).to eq(1)
-        expect(sleeper).not_to have_received(:sleep)
+        end.to raise_error(CoinDCX::Errors::ValidationError, /client_order_id/)
       end
     end
 

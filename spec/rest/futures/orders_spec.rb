@@ -31,6 +31,7 @@ RSpec.describe CoinDCX::REST::Futures::Orders do
           pair: "B-SOL_USDT",
           total_quantity: "0.05",
           order_type: "market_order",
+          client_order_id: "futures-124",
           leverage: 2
         }
       )
@@ -43,6 +44,7 @@ RSpec.describe CoinDCX::REST::Futures::Orders do
             pair: "B-SOL_USDT",
             total_quantity: "0.05",
             order_type: "market_order",
+            client_order_id: "futures-124",
             leverage: 2
           }
         },

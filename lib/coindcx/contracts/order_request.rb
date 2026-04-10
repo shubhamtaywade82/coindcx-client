@@ -6,6 +6,7 @@ module CoinDCX
       VALID_SIDES = %w[buy sell].freeze
       VALID_SPOT_ORDER_TYPES = %w[market_order limit_order stop_limit take_profit].freeze
       VALID_MARGIN_ORDER_TYPES = %w[market_order limit_order stop_limit take_profit].freeze
+      IDEMPOTENCY_KEYS = %i[client_order_id clientOrderId].freeze
 
       module_function
 
@@ -15,6 +16,7 @@ module CoinDCX
         validate_market!(attributes)
         validate_positive_quantity!(attributes, :total_quantity)
         validate_positive_number!(attributes, :price_per_unit) if present?(attributes, :price_per_unit)
+        validate_idempotency_key!(attributes)
         attributes
       end
 
@@ -28,6 +30,7 @@ module CoinDCX
         validate_pair!(attributes, :pair) if present?(attributes, :pair)
         validate_pair!(attributes, :instrument) if present?(attributes, :instrument)
         validate_positive_quantity!(attributes, :quantity, :size, :total_quantity)
+        validate_idempotency_key!(attributes)
         attributes
       end
 
@@ -37,7 +40,17 @@ module CoinDCX
         validate_market!(attributes)
         validate_positive_quantity!(attributes, :quantity, :total_quantity)
         validate_positive_number!(attributes, :price_per_unit) if present?(attributes, :price_per_unit)
+        validate_idempotency_key!(attributes)
         attributes
+      end
+
+      def validate_idempotency_key!(attributes)
+        IDEMPOTENCY_KEYS.each do |key|
+          value = fetch_optional(attributes, key)
+          return value if value && !value.to_s.strip.empty?
+        end
+
+        raise Errors::ValidationError, "client_order_id is required for order placement safety"
       end
 
       def validate_side!(attributes)

@@ -71,6 +71,7 @@ module CoinDCX
           operation_name: policy.operation_name
         )
 
+        enforce_idempotency_contract!(policy: policy, path: path, request_context: context)
         rate_limits.throttle(policy.bucket, required: auth)
 
         normalized_response = circuit_breaker.guard(policy.circuit_breaker_key, request_context: context) do
@@ -129,6 +130,19 @@ module CoinDCX
 
         normalized_body = auth ? authenticated_body(request, body) : plain_body(request, body)
         request.body = JSON.generate(Utils::Payload.stringify_keys(normalized_body)) unless normalized_body.empty?
+      end
+
+      def enforce_idempotency_contract!(policy:, path:, request_context:)
+        return unless policy.requires_idempotency?
+        return if policy.idempotency_satisfied?
+
+        raise Errors::ValidationError.new(
+          "client_order_id is required for #{path}",
+          category: :validation,
+          code: "missing_client_order_id",
+          request_context: request_context,
+          retryable: false
+        )
       end
 
       def authenticated_body(request, body)
