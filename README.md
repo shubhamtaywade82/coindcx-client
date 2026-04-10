@@ -108,7 +108,15 @@ client.transfers.wallets.transfer(
 
 client.futures.market_data.list_active_instruments(margin_currency_short_names: ['USDT'])
 client.futures.market_data.fetch_instrument(pair: 'B-BTC_USDT', margin_currency_short_name: 'USDT')
+client.futures.market_data.current_prices
+client.futures.market_data.stats(pair: 'B-BTC_USDT')
+client.futures.market_data.conversions
 client.futures.orders.list(status: 'open', margin_currency_short_name: ['USDT'])
+client.futures.orders.list_trades(page: 1, size: 50)
+
+client.funding.orders.list
+client.funding.orders.lend(currency_short_name: 'USDT', amount: '10')
+client.funding.orders.settle(id: 'funding-order-id')
 ```
 
 ## Websocket usage

@@ -11,6 +11,13 @@ module CoinDCX
           )
         end
 
+        def list_trades(attributes = {})
+          build_models(
+            Models::Trade,
+            post("/exchange/v1/derivatives/futures/trades", auth: true, bucket: :futures_trades, body: attributes)
+          )
+        end
+
         def create(order:)
           validated_order = Contracts::OrderRequest.validate_futures_create!(order)
           build_model(

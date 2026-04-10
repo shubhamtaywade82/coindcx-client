@@ -1,21 +1,11 @@
 # CoinDCX Docs Coverage Gaps (REST + WebSocket)
 
-## REST endpoint gaps
+## Current status
 
-- `POST /exchange/v1/funding/fetch_orders`
-- `POST /exchange/v1/funding/lend`
-- `POST /exchange/v1/funding/settle`
-- `POST /exchange/v1/derivatives/futures/trades`
-- `GET /market_data/v3/current_prices/futures/rt`
-- `GET /api/v1/derivatives/futures/data/stats`
-- `GET /api/v1/derivatives/futures/data/conversions`
+- No uncovered CoinDCX REST endpoint paths were found from the documented matrix.
+- No uncovered CoinDCX WebSocket event/channel surfaces were found from the documented matrix.
 
-## WebSocket gaps
+## Notes
 
-- No SDK constants/helpers for documented public stream event names:
-  - `candlestick`
-  - `depth-snapshot`
-  - `depth-update`
-  - `new-trade`
-  - `price-change`
-- Futures public socket docs reuse these event names, so the same event-constant gap applies there.
+- Last sync pass was completed against `https://docs.coindcx.com/` on 2026-04-10.
+- Re-run this audit whenever CoinDCX publishes new API/WebSocket documentation changes.

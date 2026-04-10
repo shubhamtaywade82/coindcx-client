@@ -40,6 +40,21 @@ module CoinDCX
           )
         end
 
+        def current_prices
+          get("/market_data/v3/current_prices/futures/rt", base: :public, bucket: :public_market_data)
+        end
+
+        def stats(pair:)
+          get(
+            "/api/v1/derivatives/futures/data/stats",
+            params: { pair: pair }
+          )
+        end
+
+        def conversions
+          get("/api/v1/derivatives/futures/data/conversions")
+        end
+
         private
 
         def validate_order_book_depth!(depth)

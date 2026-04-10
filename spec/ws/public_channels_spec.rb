@@ -3,6 +3,16 @@
 require "spec_helper"
 
 RSpec.describe CoinDCX::WS::PublicChannels do
+  describe "event constants" do
+    it "exposes documented public event names" do
+      expect(described_class::CANDLESTICK_EVENT).to eq("candlestick")
+      expect(described_class::DEPTH_SNAPSHOT_EVENT).to eq("depth-snapshot")
+      expect(described_class::DEPTH_UPDATE_EVENT).to eq("depth-update")
+      expect(described_class::NEW_TRADE_EVENT).to eq("new-trade")
+      expect(described_class::PRICE_CHANGE_EVENT).to eq("price-change")
+    end
+  end
+
   describe ".order_book" do
     it "builds documented snapshot channels for depths 10, 20, and 50" do
       [10, 20, 50].each do |depth|

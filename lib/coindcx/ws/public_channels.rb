@@ -10,6 +10,11 @@ module CoinDCX
       CURRENT_PRICES_FUTURES_CHANNEL = "currentPrices@futures@rt"
       CURRENT_PRICES_FUTURES_UPDATE_EVENT = "currentPrices@futures#update"
       PRICE_STATS_SPOT_UPDATE_EVENT = "priceStats@spot#update"
+      CANDLESTICK_EVENT = "candlestick"
+      DEPTH_SNAPSHOT_EVENT = "depth-snapshot"
+      DEPTH_UPDATE_EVENT = "depth-update"
+      NEW_TRADE_EVENT = "new-trade"
+      PRICE_CHANGE_EVENT = "price-change"
 
       module_function
 

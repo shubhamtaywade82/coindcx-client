@@ -17,6 +17,9 @@ RSpec.describe CoinDCX::REST::Futures::MarketData do
     resource.list_trades(pair: 'B-BTC_USDT')
     resource.fetch_order_book(instrument: 'B-BTC_USDT', depth: 50)
     resource.list_candlesticks(pair: 'B-BTC_USDT', from: 1, to: 2, resolution: '1D')
+    resource.current_prices
+    resource.stats(pair: 'B-BTC_USDT')
+    resource.conversions
 
     expect(http_client).to have_received(:get).with('/exchange/v1/derivatives/futures/data/active_instruments',
                                                     params: { 'margin_currency_short_name[]': ['USDT'] }, body: {}, auth: false, base: :api, bucket: nil)
@@ -29,6 +32,12 @@ RSpec.describe CoinDCX::REST::Futures::MarketData do
     expect(http_client).to have_received(:get).with('/market_data/candlesticks',
                                                     params: { pair: 'B-BTC_USDT', from: 1, to: 2, resolution: '1D', pcode: 'f' }, body: {},
                                                     auth: false, base: :public, bucket: nil)
+    expect(http_client).to have_received(:get).with('/market_data/v3/current_prices/futures/rt', params: {}, body: {}, auth: false,
+                                                                                                 base: :public, bucket: :public_market_data)
+    expect(http_client).to have_received(:get).with('/api/v1/derivatives/futures/data/stats', params: { pair: 'B-BTC_USDT' }, body: {},
+                                                                                              auth: false, base: :api, bucket: nil)
+    expect(http_client).to have_received(:get).with('/api/v1/derivatives/futures/data/conversions', params: {}, body: {}, auth: false,
+                                                                                                    base: :api, bucket: nil)
   end
 
   it 'rejects unsupported order book depths' do
