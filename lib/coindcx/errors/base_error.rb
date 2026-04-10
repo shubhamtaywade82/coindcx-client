@@ -45,5 +45,8 @@ module CoinDCX
     class CircuitOpenError < RequestError; end
 
     AuthenticationError = AuthError
+    # Semantic aliases used in documentation and consumer code.
+    NetworkError = TransportError
+    ExchangeError = UpstreamServerError
   end
 end

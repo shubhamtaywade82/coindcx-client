@@ -5,32 +5,34 @@ module CoinDCX
     module Public
       class MarketData < BaseResource
         def list_tickers
-          build_models(Models::Market, get("/exchange/ticker"))
+          build_models(Models::Market, get("/exchange/ticker", bucket: :public_ticker))
         end
 
         def list_markets
-          get("/exchange/v1/markets")
+          get("/exchange/v1/markets", bucket: :public_market_data)
         end
 
         def list_market_details
-          build_models(Models::Market, get("/exchange/v1/markets_details"))
+          build_models(Models::Market, get("/exchange/v1/markets_details", bucket: :public_market_data))
         end
 
         def list_trades(pair:, limit: nil)
           build_models(
             Models::Trade,
-            get("/market_data/trade_history", base: :public, params: { pair: pair, limit: limit })
+            get("/market_data/trade_history", base: :public, bucket: :public_trades,
+                params: { pair: pair, limit: limit })
           )
         end
 
         def fetch_order_book(pair:)
-          get("/market_data/orderbook", base: :public, params: { pair: pair })
+          get("/market_data/orderbook", base: :public, bucket: :public_order_book, params: { pair: pair })
         end
 
         def list_candles(pair:, interval:, start_time: nil, end_time: nil, limit: nil)
           get(
             "/market_data/candles",
             base: :public,
+            bucket: :public_candles,
             params: {
               pair: pair,
               interval: interval,

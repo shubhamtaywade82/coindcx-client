@@ -7,14 +7,16 @@ module CoinDCX
   module WS
     class ConnectionManager
       MAX_RETRIES = 5
+      MAX_BACKOFF_INTERVAL = 30.0
 
-      def initialize(configuration:, backend:, logger:, sleeper: Kernel, thread_factory: nil, monotonic_clock: nil)
+      def initialize(configuration:, backend:, logger:, sleeper: Kernel, thread_factory: nil, monotonic_clock: nil, randomizer: nil)
         @configuration = configuration
         @backend = backend
         @logger = logger
         @sleeper = sleeper
         @thread_factory = thread_factory || ->(&block) { Thread.new(&block) }
         @monotonic_clock = monotonic_clock || -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+        @randomizer = randomizer || -> { rand }
         @state = ConnectionState.new
         @subscriptions = SubscriptionRegistry.new
         @handlers = Hash.new { |hash, key| hash[key] = [] }
@@ -34,6 +36,8 @@ module CoinDCX
       end
 
       def disconnect
+        return self if state.current == :disconnected || state.stopping?
+
         transition_to(:stopping)
         stop_heartbeat
         backend.disconnect
@@ -81,7 +85,7 @@ module CoinDCX
       private
 
       attr_reader :configuration, :backend, :logger, :sleeper, :thread_factory,
-                  :monotonic_clock, :state, :subscriptions, :handlers, :mutex
+                  :monotonic_clock, :randomizer, :state, :subscriptions, :handlers, :mutex
 
       def connect_with_retries
         attempts = 0
@@ -311,9 +315,8 @@ module CoinDCX
 
       def heartbeat_required?
         return false unless state.connected?
-        return false unless subscriptions.any?
 
-        subscriptions.public_subscriptions?
+        subscriptions.any?
       end
 
       def stale_connection?
@@ -333,7 +336,9 @@ module CoinDCX
       end
 
       def reconnect_interval(attempts)
-        configuration.socket_reconnect_interval * (2**(attempts - 1))
+        raw = configuration.socket_reconnect_interval * (2**(attempts - 1))
+        base = [raw, MAX_BACKOFF_INTERVAL].min
+        base + (base * 0.25 * randomizer.call)
       end
 
       def max_retries
