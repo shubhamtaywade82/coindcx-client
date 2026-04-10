@@ -33,6 +33,10 @@ module CoinDCX
       @futures ||= REST::Futures::Facade.new(http_client: @http_client)
     end
 
+    def funding
+      @funding ||= REST::Funding::Facade.new(http_client: @http_client)
+    end
+
     def ws
       @ws ||= WS::SocketIOClient.new(configuration: configuration)
     end

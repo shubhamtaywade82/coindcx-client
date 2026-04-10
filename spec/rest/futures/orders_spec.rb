@@ -68,6 +68,7 @@ RSpec.describe CoinDCX::REST::Futures::Orders do
   describe "authenticated routing" do
     it "routes futures order operations through authenticated transport calls" do
       resource.list
+      resource.list_trades
       resource.cancel(id: "1")
       resource.edit(id: "1")
 
@@ -84,6 +85,13 @@ RSpec.describe CoinDCX::REST::Futures::Orders do
         auth: true,
         base: :api,
         bucket: :futures_cancel_order
+      )
+      expect(http_client).to have_received(:post).with(
+        "/exchange/v1/derivatives/futures/trades",
+        body: {},
+        auth: true,
+        base: :api,
+        bucket: :futures_trades
       )
       expect(http_client).to have_received(:post).with(
         "/exchange/v1/derivatives/futures/orders/edit",

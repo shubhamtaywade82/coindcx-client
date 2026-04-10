@@ -14,5 +14,6 @@ RSpec.describe CoinDCX::Client do
     expect(client.user).to be_a(CoinDCX::REST::User::Facade)
     expect(client.transfers).to be_a(CoinDCX::REST::Transfers::Facade)
     expect(client.futures).to be_a(CoinDCX::REST::Futures::Facade)
+    expect(client.funding).to be_a(CoinDCX::REST::Funding::Facade)
   end
 end

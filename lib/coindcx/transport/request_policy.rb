@@ -23,10 +23,12 @@ module CoinDCX
         "/exchange/v1/users/balances",
         "/exchange/v1/users/info",
         "/exchange/v1/derivatives/futures/orders",
+        "/exchange/v1/derivatives/futures/trades",
         "/exchange/v1/derivatives/futures/positions",
         "/exchange/v1/derivatives/futures/positions/transactions",
         "/exchange/v1/derivatives/futures/positions/cross_margin_details",
-        "/exchange/v1/derivatives/futures/wallets"
+        "/exchange/v1/derivatives/futures/wallets",
+        "/exchange/v1/funding/fetch_orders"
       ].freeze
       IDEMPOTENCY_KEYS = %w[client_order_id clientOrderId].freeze
 
