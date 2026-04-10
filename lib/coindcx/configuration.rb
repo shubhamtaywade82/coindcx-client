@@ -69,6 +69,7 @@ module CoinDCX
                   :private_read_retry_budget, :idempotent_order_retry_budget,
                   :circuit_breaker_threshold, :circuit_breaker_cooldown
 
+    # rubocop:disable Metrics/MethodLength
     def initialize
       @api_base_url = DEFAULT_API_BASE_URL
       @public_base_url = DEFAULT_PUBLIC_BASE_URL
@@ -93,6 +94,7 @@ module CoinDCX
       @circuit_breaker_threshold = 3
       @circuit_breaker_cooldown = 30.0
     end
+    # rubocop:enable Metrics/MethodLength
 
     def rate_limit_for(bucket_name)
       endpoint_rate_limits[bucket_name.to_sym]

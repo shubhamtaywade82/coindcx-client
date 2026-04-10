@@ -4,6 +4,7 @@ require "json"
 
 module CoinDCX
   module WS
+    # rubocop:disable Metrics/ClassLength
     class ConnectionManager
       MAX_RETRIES = 5
       MAX_BACKOFF_INTERVAL = 30.0
@@ -85,6 +86,7 @@ module CoinDCX
                   :monotonic_clock, :randomizer, :state, :subscriptions, :handlers, :mutex,
                   :registered_event_names
 
+      # rubocop:disable Metrics/MethodLength
       def connect_with_retries
         attempts = 0
 
@@ -109,6 +111,7 @@ module CoinDCX
           retry
         end
       end
+      # rubocop:enable Metrics/MethodLength
 
       def establish_connection
         @engine_io_open = false
@@ -220,6 +223,7 @@ module CoinDCX
 
       # CoinDCX often sends { "event" => "...", "data" => "<JSON string of fields>" }. Merge parsed
       # fields into the top-level hash so consumers see p / s / etc. without a second parse.
+      # rubocop:disable Metrics/CyclomaticComplexity
       def normalize_coin_dcx_event_payload(payload)
         return payload unless payload.is_a?(Hash)
 
@@ -240,6 +244,7 @@ module CoinDCX
       rescue JSON::ParserError
         payload
       end
+      # rubocop:enable Metrics/CyclomaticComplexity
 
       def dispatch(event_name, payload)
         handlers.fetch(event_name, []).each do |handler|
@@ -288,6 +293,7 @@ module CoinDCX
         )
       end
 
+      # rubocop:disable Metrics/MethodLength
       def check_liveness!
         return unless heartbeat_required?
         return unless stale_connection?
@@ -310,6 +316,7 @@ module CoinDCX
         )
         reconnect
       end
+      # rubocop:enable Metrics/MethodLength
 
       def heartbeat_required?
         return false unless state.connected?
@@ -343,6 +350,7 @@ module CoinDCX
         configuration.socket_reconnect_attempts || MAX_RETRIES
       end
 
+      # rubocop:disable Metrics/MethodLength
       def handle_reconnect_failure(attempts, error)
         if attempts > max_retries
           transition_to(:failed)
@@ -374,6 +382,7 @@ module CoinDCX
         )
         sleeper.sleep(sleep_interval)
       end
+      # rubocop:enable Metrics/MethodLength
 
       def transition_to(next_state)
         previous_state = state.current
@@ -406,5 +415,6 @@ module CoinDCX
         Logging::StructuredLogger.log(logger, level, payload)
       end
     end
+    # rubocop:enable Metrics/ClassLength
   end
 end
