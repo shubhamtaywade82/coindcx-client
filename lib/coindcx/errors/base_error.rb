@@ -27,12 +27,14 @@ module CoinDCX
     class ApiError < Error
       attr_reader :status, :body, :retry_after
 
+      # rubocop:disable Metrics/ParameterLists
       def initialize(message, status: nil, body: nil, category: nil, code: nil, request_context: nil, retryable: false, retry_after: nil)
         super(message, category: category, code: code, request_context: request_context, retryable: retryable)
         @status = status
         @body = body
         @retry_after = retry_after
       end
+      # rubocop:enable Metrics/ParameterLists
     end
 
     class RequestError < ApiError; end

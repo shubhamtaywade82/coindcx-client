@@ -65,7 +65,7 @@ RSpec.describe CoinDCX::Transport::HttpClient do
           hash_including(
             event: "api_call",
             endpoint: "/exchange/v1/orders/create",
-            request_id: a_string_matching(/\A[0-9a-f\-]{36}\z/),
+            request_id: a_string_matching(/\A[0-9a-f-]{36}\z/),
             retries: 0
           )
         )
@@ -169,7 +169,10 @@ RSpec.describe CoinDCX::Transport::HttpClient do
             bucket: :spot_create_order,
             body: { market: "SNTBTC" }
           )
-        end.to raise_error(CoinDCX::Errors::TransportError, /CoinDCX transport failed for \/exchange\/v1\/orders\/create/)
+        end.to raise_error(
+          CoinDCX::Errors::TransportError,
+          %r{CoinDCX transport failed for /exchange/v1/orders/create}
+        )
 
         expect(attempts).to eq(1)
         expect(sleeper).not_to have_received(:sleep)

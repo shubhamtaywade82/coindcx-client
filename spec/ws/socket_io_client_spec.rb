@@ -165,7 +165,7 @@ RSpec.describe CoinDCX::WS::SocketIOClient do
         backend: backend,
         sleeper: sleeper,
         thread_factory: thread_factory_without_run,
-        randomizer: -> { 0.0 }  # zero jitter → deterministic sleep value
+        randomizer: -> { 0.0 } # zero jitter → deterministic sleep value
       )
       client.connect
 

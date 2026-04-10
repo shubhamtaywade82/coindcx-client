@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 require "json"
-require "set"
 
 module CoinDCX
   module WS
+    # rubocop:disable Metrics/ClassLength
     class ConnectionManager
       MAX_RETRIES = 5
       MAX_BACKOFF_INTERVAL = 30.0
@@ -68,9 +68,7 @@ module CoinDCX
           delivery_mode: delivery_mode
         )
         register_event_bridge(event_name) if state.connected?
-        if state.connected? && @engine_io_open
-          emit_join(subscription_for(type: type, channel_name: channel_name, event_name: event_name))
-        end
+        emit_join(subscription_for(type: type, channel_name: channel_name, event_name: event_name)) if state.connected? && @engine_io_open
         transition_to(:subscribed) if state.connected? && subscriptions.any?
         self
       end
@@ -85,15 +83,17 @@ module CoinDCX
       private
 
       attr_reader :configuration, :backend, :logger, :sleeper, :thread_factory,
-                  :monotonic_clock, :randomizer, :state, :subscriptions, :handlers, :mutex
+                  :monotonic_clock, :randomizer, :state, :subscriptions, :handlers, :mutex,
+                  :registered_event_names
 
+      # rubocop:disable Metrics/MethodLength
       def connect_with_retries
         attempts = 0
 
         begin
           attempts += 1
           establish_connection
-        rescue Errors::SocketAuthenticationError => error
+        rescue Errors::SocketAuthenticationError => e
           transition_to(:failed)
           log(
             :error,
@@ -101,16 +101,17 @@ module CoinDCX
             endpoint: configuration.socket_base_url,
             retries: attempts - 1,
             latency: nil,
-            error_class: error.class.name,
-            message: error.message,
+            error_class: e.class.name,
+            message: e.message,
             subscription_count: subscriptions.count
           )
-          raise error
-        rescue Errors::SocketConnectionError => error
-          handle_reconnect_failure(attempts, error)
+          raise e
+        rescue Errors::SocketConnectionError => e
+          handle_reconnect_failure(attempts, e)
           retry
         end
       end
+      # rubocop:enable Metrics/MethodLength
 
       def establish_connection
         @engine_io_open = false
@@ -155,7 +156,7 @@ module CoinDCX
       end
 
       def reconnect
-        return unless begin_reconnect
+        return unless begin_reconnect?
 
         transition_to(:reconnecting)
         stop_heartbeat
@@ -166,7 +167,7 @@ module CoinDCX
         finish_reconnect
       end
 
-      def begin_reconnect
+      def begin_reconnect?
         mutex.synchronize do
           return false if @reconnecting
 
@@ -187,9 +188,9 @@ module CoinDCX
       def emit_join(subscription)
         payload = subscription.payload
         backend.emit("join", payload)
-      rescue Errors::AuthError => error
+      rescue Errors::AuthError => e
         raise Errors::SocketAuthenticationError,
-              "private websocket authentication failed for #{subscription.channel_name}: #{error.message}"
+              "private websocket authentication failed for #{subscription.channel_name}: #{e.message}"
       end
 
       def register_event_bridge(event_name)
@@ -213,7 +214,7 @@ module CoinDCX
         return nil if parts.empty?
         return parts.first if parts.size == 1
 
-        hashes = parts.select { |p| p.is_a?(Hash) }
+        hashes = parts.grep(Hash)
         return hashes.reduce { |acc, h| acc.merge(h) } if hashes.size > 1
         return hashes.first if hashes.size == 1
 
@@ -222,6 +223,7 @@ module CoinDCX
 
       # CoinDCX often sends { "event" => "...", "data" => "<JSON string of fields>" }. Merge parsed
       # fields into the top-level hash so consumers see p / s / etc. without a second parse.
+      # rubocop:disable Metrics/CyclomaticComplexity
       def normalize_coin_dcx_event_payload(payload)
         return payload unless payload.is_a?(Hash)
 
@@ -242,19 +244,20 @@ module CoinDCX
       rescue JSON::ParserError
         payload
       end
+      # rubocop:enable Metrics/CyclomaticComplexity
 
       def dispatch(event_name, payload)
         handlers.fetch(event_name, []).each do |handler|
           handler.call(payload)
-        rescue StandardError => error
+        rescue StandardError => e
           log(
             :error,
             event: "ws_handler_error",
             endpoint: event_name,
             retries: 0,
             latency: nil,
-            error_class: error.class.name,
-            message: error.message
+            error_class: e.class.name,
+            message: e.message
           )
         end
       end
@@ -278,18 +281,19 @@ module CoinDCX
 
           check_liveness!
         end
-      rescue StandardError => error
+      rescue StandardError => e
         log(
           :error,
           event: "ws_heartbeat_failed",
           endpoint: configuration.socket_base_url,
           retries: 0,
           latency: nil,
-          error_class: error.class.name,
-          message: error.message
+          error_class: e.class.name,
+          message: e.message
         )
       end
 
+      # rubocop:disable Metrics/MethodLength
       def check_liveness!
         return unless heartbeat_required?
         return unless stale_connection?
@@ -312,6 +316,7 @@ module CoinDCX
         )
         reconnect
       end
+      # rubocop:enable Metrics/MethodLength
 
       def heartbeat_required?
         return false unless state.connected?
@@ -345,6 +350,7 @@ module CoinDCX
         configuration.socket_reconnect_attempts || MAX_RETRIES
       end
 
+      # rubocop:disable Metrics/MethodLength
       def handle_reconnect_failure(attempts, error)
         if attempts > max_retries
           transition_to(:failed)
@@ -376,6 +382,7 @@ module CoinDCX
         )
         sleeper.sleep(sleep_interval)
       end
+      # rubocop:enable Metrics/MethodLength
 
       def transition_to(next_state)
         previous_state = state.current
@@ -397,20 +404,17 @@ module CoinDCX
       def subscription_for(type:, channel_name:, event_name:)
         subscriptions.each do |subscription|
           return subscription if subscription.type == type &&
-                                subscription.channel_name == channel_name &&
-                                subscription.event_name == event_name
+                                 subscription.channel_name == channel_name &&
+                                 subscription.event_name == event_name
         end
 
         raise Errors::SocketStateError, "subscription intent not registered for #{event_name}"
-      end
-
-      def registered_event_names
-        @registered_event_names
       end
 
       def log(level, payload)
         Logging::StructuredLogger.log(logger, level, payload)
       end
     end
+    # rubocop:enable Metrics/ClassLength
   end
 end

@@ -15,7 +15,12 @@ module CoinDCX
           validated_order = Contracts::OrderRequest.validate_futures_create!(order)
           build_model(
             Models::Order,
-            post("/exchange/v1/derivatives/futures/orders/create", auth: true, bucket: :futures_create_order, body: { order: validated_order })
+            post(
+              "/exchange/v1/derivatives/futures/orders/create",
+              auth: true,
+              bucket: :futures_create_order,
+              body: { order: validated_order }
+            )
           )
         end
 

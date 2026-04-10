@@ -2,6 +2,7 @@
 
 require_relative 'lib/coindcx/version'
 
+# rubocop:disable Metrics/BlockLength
 Gem::Specification.new do |spec|
   spec.name = 'coindcx-client'
   spec.version = CoinDCX::VERSION
@@ -30,3 +31,4 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'faraday', '~> 2.14'
   spec.add_dependency 'socket.io-client-simple', '~> 1.2'
 end
+# rubocop:enable Metrics/BlockLength

@@ -136,8 +136,6 @@ class FuturesPublicWsTester
       row.strip.empty? ? nil : row.strip
     when Hash
       row["pair"] || row[:pair] || row["instrument"] || row[:instrument]
-    else
-      nil
     end
   end
 

@@ -10,10 +10,10 @@ module CoinDCX
     DEFAULT_ENDPOINT_RATE_LIMITS = {
       # Public (unauthenticated) endpoints — shared bucket keeps burst bursts off the exchange.
       public_market_data: { limit: 30, period: 1 },
-      public_ticker:      { limit: 10, period: 1 },
-      public_order_book:  { limit: 10, period: 1 },
-      public_trades:      { limit: 10, period: 1 },
-      public_candles:     { limit: 10, period: 1 },
+      public_ticker: { limit: 10, period: 1 },
+      public_order_book: { limit: 10, period: 1 },
+      public_trades: { limit: 10, period: 1 },
+      public_candles: { limit: 10, period: 1 },
       spot_create_order_multiple: { limit: 2000, period: 60 },
       spot_create_order: { limit: 2000, period: 60 },
       spot_cancel_all: { limit: 30, period: 60 },
@@ -69,6 +69,7 @@ module CoinDCX
                   :private_read_retry_budget, :idempotent_order_retry_budget,
                   :circuit_breaker_threshold, :circuit_breaker_cooldown
 
+    # rubocop:disable Metrics/MethodLength
     def initialize
       @api_base_url = DEFAULT_API_BASE_URL
       @public_base_url = DEFAULT_PUBLIC_BASE_URL
@@ -93,6 +94,7 @@ module CoinDCX
       @circuit_breaker_threshold = 3
       @circuit_breaker_cooldown = 30.0
     end
+    # rubocop:enable Metrics/MethodLength
 
     def rate_limit_for(bucket_name)
       endpoint_rate_limits[bucket_name.to_sym]

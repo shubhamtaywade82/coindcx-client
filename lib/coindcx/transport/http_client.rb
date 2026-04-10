@@ -6,7 +6,9 @@ require "securerandom"
 
 module CoinDCX
   module Transport
+    # rubocop:disable Metrics/ClassLength
     class HttpClient
+      # rubocop:disable Metrics/MethodLength
       def initialize(configuration:, stubs: nil, sleeper: Kernel, monotonic_clock: nil)
         @configuration = configuration
         @rate_limits = RateLimitRegistry.new(configuration.endpoint_rate_limits)
@@ -27,6 +29,7 @@ module CoinDCX
           public: build_connection(configuration.public_base_url, stubs)
         }
       end
+      # rubocop:enable Metrics/MethodLength
 
       attr_reader :configuration
 
@@ -46,6 +49,7 @@ module CoinDCX
 
       attr_reader :logger, :rate_limits, :retry_policy, :circuit_breaker
 
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
       def request(method, path, params:, body:, auth:, base:, bucket:)
         policy = RequestPolicy.build(
           configuration: configuration,
@@ -117,6 +121,7 @@ module CoinDCX
         )
         raise
       end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
       def apply_payload(request, method:, params:, body:, auth:)
         request.params.update(encode_query(params)) unless params.empty?
@@ -155,6 +160,7 @@ module CoinDCX
         )
       end
 
+      # rubocop:disable Metrics/MethodLength
       def classify_error(status, path, body, headers:, request_context:, policy:)
         message = "CoinDCX request failed for #{path}"
         error_class, category, retryable = error_details_for(status: status, headers: headers, policy: policy)
@@ -177,6 +183,7 @@ module CoinDCX
           retry_after: policy.retry_after(headers)
         )
       end
+      # rubocop:enable Metrics/MethodLength
 
       def parse_body(body)
         return {} if body.nil? || body.strip.empty?
@@ -217,7 +224,9 @@ module CoinDCX
 
       def error_details_for(status:, headers:, policy:)
         return [Errors::AuthError, :auth, false] if status == 401
-        return [Errors::RetryableRateLimitError, :rate_limit, true] if status == 429 && policy.retryable_response?(status: status, headers: headers)
+        if status == 429 && policy.retryable_response?(status: status, headers: headers)
+          return [Errors::RetryableRateLimitError, :rate_limit, true]
+        end
         return [Errors::RateLimitError, :rate_limit, false] if status == 429
         return [Errors::UpstreamServerError, :upstream, policy.retryable_response?(status: status, headers: headers)] if status >= 500
         return [Errors::RemoteValidationError, :validation, false] if policy.validation_status?(status)
@@ -262,5 +271,6 @@ module CoinDCX
         Logging::StructuredLogger.log(logger, level, payload)
       end
     end
+    # rubocop:enable Metrics/ClassLength
   end
 end
