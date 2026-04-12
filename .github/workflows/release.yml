@@ -26,6 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -113,10 +114,25 @@ jobs:
             exit 1
           fi
 
+      # Same pattern as dhanhq-client: API key via GEM_HOST_API_KEY + TOTP for RubyGems MFA.
+      # Add RUBYGEMS_OTP_SECRET (base32) to the rubygems-release environment secrets.
+      - name: Install OTP generator
+        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.publish == 'true'
+        run: gem install rotp
+
       - name: Publish to RubyGems
         if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.publish == 'true'
+        env:
+          GEM_HOST_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
+          RUBYGEMS_OTP_SECRET: ${{ secrets.RUBYGEMS_OTP_SECRET }}
         run: |
-          mkdir -p ~/.gem
-          echo ":rubygems_api_key: ${{ secrets.RUBYGEMS_API_KEY }}" > ~/.gem/credentials
-          chmod 0600 ~/.gem/credentials
-          gem push coindcx-client-*.gem
+          set -euo pipefail
+          otp_code=$(ruby -r rotp -e "puts ROTP::TOTP.new(ENV['RUBYGEMS_OTP_SECRET']).now")
+          gem_version=$(ruby -e "require './lib/coindcx/version'; puts CoinDCX::VERSION")
+          gem_file="coindcx-client-${gem_version}.gem"
+          if [ ! -f "$gem_file" ]; then
+            echo "ERROR: Gem file not found: $gem_file"
+            ls -la ./*.gem 2>/dev/null || echo "No gem files in working directory"
+            exit 1
+          fi
+          gem push "$gem_file" --otp "$otp_code"
