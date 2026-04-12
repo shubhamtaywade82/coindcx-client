@@ -6,34 +6,23 @@ module CoinDCX
       RETRYABLE_STATUSES = [500, 502, 503, 504].freeze
       VALIDATION_STATUSES = [400, 404, 422].freeze
       ORDER_CREATE_PATHS = [
-        "/exchange/v1/orders/create",
-        "/exchange/v1/orders/create_multiple",
-        "/exchange/v1/derivatives/futures/orders/create",
-        "/exchange/v1/margin/create"
+        "/exchange/v1/orders/create", "/exchange/v1/orders/create_multiple",
+        "/exchange/v1/derivatives/futures/orders/create", "/exchange/v1/margin/create"
       ].freeze
       CRITICAL_ORDER_PATHS = ORDER_CREATE_PATHS.freeze
       # Authenticated GETs that mirror private read semantics (signed body + X-AUTH headers).
-      FUTURES_AUTH_GET_READ_PATHS = [
-        "/exchange/v1/derivatives/futures/data/instrument"
-      ].freeze
+      FUTURES_AUTH_GET_READ_PATHS = ["/exchange/v1/derivatives/futures/data/instrument"].freeze
 
       READ_ONLY_POST_PATHS = [
-        "/exchange/v1/orders/status",
-        "/exchange/v1/orders/status_multiple",
-        "/exchange/v1/orders/active_orders",
-        "/exchange/v1/orders/active_orders_count",
-        "/exchange/v1/orders/trade_history",
-        "/exchange/v1/margin/fetch_orders",
-        "/exchange/v1/margin/order",
-        "/exchange/v1/users/balances",
-        "/exchange/v1/users/info",
-        "/exchange/v1/derivatives/futures/orders",
-        "/exchange/v1/derivatives/futures/trades",
-        "/exchange/v1/derivatives/futures/positions",
+        "/exchange/v1/orders/status", "/exchange/v1/orders/status_multiple",
+        "/exchange/v1/orders/active_orders", "/exchange/v1/orders/active_orders_count",
+        "/exchange/v1/orders/trade_history", "/exchange/v1/margin/fetch_orders",
+        "/exchange/v1/margin/order", "/exchange/v1/users/balances",
+        "/exchange/v1/users/info", "/exchange/v1/derivatives/futures/orders",
+        "/exchange/v1/derivatives/futures/trades", "/exchange/v1/derivatives/futures/positions",
         "/exchange/v1/derivatives/futures/positions/transactions",
         "/exchange/v1/derivatives/futures/positions/cross_margin_details",
-        "/exchange/v1/derivatives/futures/wallets",
-        "/exchange/v1/funding/fetch_orders"
+        "/exchange/v1/derivatives/futures/wallets", "/exchange/v1/funding/fetch_orders"
       ].freeze
       IDEMPOTENCY_KEYS = %w[client_order_id clientOrderId].freeze
 
@@ -56,14 +45,19 @@ module CoinDCX
 
       def self.retry_budget_for(configuration:, method:, path:, body:, auth:)
         return configuration.market_data_retry_budget if method == :get && !auth
-        if method == :get && auth && FUTURES_AUTH_GET_READ_PATHS.include?(path)
-          return configuration.private_read_retry_budget
-        end
+        return configuration.private_read_retry_budget if futures_signed_read_get?(method, path, auth)
         return configuration.private_read_retry_budget if READ_ONLY_POST_PATHS.include?(path)
-        return configuration.idempotent_order_retry_budget if ORDER_CREATE_PATHS.include?(path) && idempotency_contract_met?(path: path,
-                                                                                                                             body: body)
+        return configuration.idempotent_order_retry_budget if idempotent_order_retry?(path, body)
 
         0
+      end
+
+      def self.futures_signed_read_get?(method, path, auth)
+        method == :get && auth && FUTURES_AUTH_GET_READ_PATHS.include?(path)
+      end
+
+      def self.idempotent_order_retry?(path, body)
+        ORDER_CREATE_PATHS.include?(path) && idempotency_contract_met?(path: path, body: body)
       end
 
       def self.circuit_breaker_key_for(path:)
