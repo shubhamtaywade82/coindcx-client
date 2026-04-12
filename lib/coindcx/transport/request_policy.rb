@@ -12,6 +12,11 @@ module CoinDCX
         "/exchange/v1/margin/create"
       ].freeze
       CRITICAL_ORDER_PATHS = ORDER_CREATE_PATHS.freeze
+      # Authenticated GETs that mirror private read semantics (signed body + X-AUTH headers).
+      FUTURES_AUTH_GET_READ_PATHS = [
+        "/exchange/v1/derivatives/futures/data/instrument"
+      ].freeze
+
       READ_ONLY_POST_PATHS = [
         "/exchange/v1/orders/status",
         "/exchange/v1/orders/status_multiple",
@@ -51,6 +56,9 @@ module CoinDCX
 
       def self.retry_budget_for(configuration:, method:, path:, body:, auth:)
         return configuration.market_data_retry_budget if method == :get && !auth
+        if method == :get && auth && FUTURES_AUTH_GET_READ_PATHS.include?(path)
+          return configuration.private_read_retry_budget
+        end
         return configuration.private_read_retry_budget if READ_ONLY_POST_PATHS.include?(path)
         return configuration.idempotent_order_retry_budget if ORDER_CREATE_PATHS.include?(path) && idempotency_contract_met?(path: path,
                                                                                                                              body: body)

@@ -18,7 +18,10 @@ module CoinDCX
             Models::Instrument,
             get(
               "/exchange/v1/derivatives/futures/data/instrument",
-              params: { pair: pair, margin_currency_short_name: margin_currency_short_name }
+              params: { pair: pair, margin_currency_short_name: margin_currency_short_name },
+              body: {},
+              auth: true,
+              bucket: :futures_instrument_detail
             )
           )
         end

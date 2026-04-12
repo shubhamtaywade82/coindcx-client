@@ -22,7 +22,9 @@ module CoinDCX
         @handlers = Hash.new { |hash, key| hash[key] = [] }
         @registered_event_names = Set.new
         @mutex = Mutex.new
-        @last_activity_at = monotonic_time
+        # Lock-free liveness clock: Socket.IO callbacks and the heartbeat thread both touch this.
+        # Using Mutex here caused rare ThreadError (unlock from wrong thread/fiber) under concurrent WS load.
+        @last_activity_usec = (monotonic_time * 1_000_000).to_i
         @engine_io_open = false
       end
 
@@ -329,11 +331,12 @@ module CoinDCX
       end
 
       def liveness_age
-        monotonic_time - mutex.synchronize { @last_activity_at }
+        now_usec = (monotonic_time * 1_000_000).to_i
+        (now_usec - @last_activity_usec) / 1_000_000.0
       end
 
       def touch_activity!
-        mutex.synchronize { @last_activity_at = monotonic_time }
+        @last_activity_usec = (monotonic_time * 1_000_000).to_i
       end
 
       def monotonic_time

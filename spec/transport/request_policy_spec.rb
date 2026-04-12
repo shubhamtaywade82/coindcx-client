@@ -50,5 +50,18 @@ RSpec.describe CoinDCX::Transport::RequestPolicy do
       expect(policy.idempotency_satisfied?).to be(false)
       expect(policy.retry_budget).to eq(0)
     end
+
+    it "uses the private read retry budget for authenticated futures instrument GET" do
+      policy = described_class.build(
+        configuration: configuration,
+        method: :get,
+        path: "/exchange/v1/derivatives/futures/data/instrument",
+        body: {},
+        auth: true,
+        bucket: :futures_instrument_detail
+      )
+
+      expect(policy.retry_budget).to eq(configuration.private_read_retry_budget)
+    end
   end
 end

@@ -24,7 +24,8 @@ RSpec.describe CoinDCX::REST::Futures::MarketData do
     expect(http_client).to have_received(:get).with('/exchange/v1/derivatives/futures/data/active_instruments',
                                                     params: { 'margin_currency_short_name[]': ['USDT'] }, body: {}, auth: false, base: :api, bucket: nil)
     expect(http_client).to have_received(:get).with('/exchange/v1/derivatives/futures/data/instrument',
-                                                    params: { pair: 'B-BTC_USDT', margin_currency_short_name: 'USDT' }, body: {}, auth: false, base: :api, bucket: nil)
+                                                    params: { pair: 'B-BTC_USDT', margin_currency_short_name: 'USDT' }, body: {}, auth: true,
+                                                    base: :api, bucket: :futures_instrument_detail)
     expect(http_client).to have_received(:get).with('/exchange/v1/derivatives/futures/data/trades', params: { pair: 'B-BTC_USDT' }, body: {},
                                                                                                     auth: false, base: :api, bucket: nil)
     expect(http_client).to have_received(:get).with('/market_data/v3/orderbook/B-BTC_USDT-futures/50', params: {}, body: {}, auth: false,

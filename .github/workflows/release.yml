@@ -72,7 +72,11 @@ jobs:
           fi
 
           TARGET_VERSION='${{ steps.release_version.outputs.value }}'
-          if ! rg "^##[[:space:]]+${TARGET_VERSION}$" CHANGELOG.md; then
+          if ! ruby -e "
+            version = ARGV[0]
+            found = File.read('CHANGELOG.md').lines.any? { |line| line.match?(/\A##\s+#{Regexp.escape(version)}\s*\z/) }
+            exit(found ? 0 : 1)
+          " "$TARGET_VERSION"; then
             echo "Missing CHANGELOG entry for ${TARGET_VERSION}"
             exit 1
           fi
@@ -104,7 +108,7 @@ jobs:
           gem specification coindcx-client-*.gem name platform > /tmp/gem-spec.txt
           cat /tmp/gem-version.txt
           cat /tmp/gem-spec.txt
-          if ! rg "${{ steps.release_version.outputs.value }}" /tmp/gem-version.txt; then
+          if ! grep -qF "${{ steps.release_version.outputs.value }}" /tmp/gem-version.txt; then
             echo "Built gem version does not match release version"
             exit 1
           fi

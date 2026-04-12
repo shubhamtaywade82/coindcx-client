@@ -44,6 +44,7 @@ module CoinDCX
       futures_wallet_details: DEFAULT_PRIVATE_RATE_LIMIT,
       futures_wallet_transactions: DEFAULT_PRIVATE_RATE_LIMIT,
       futures_trades: DEFAULT_PRIVATE_RATE_LIMIT,
+      futures_instrument_detail: DEFAULT_PRIVATE_RATE_LIMIT,
       funding_fetch_orders: DEFAULT_PRIVATE_RATE_LIMIT,
       funding_lend: DEFAULT_PRIVATE_RATE_LIMIT,
       funding_settle: DEFAULT_PRIVATE_RATE_LIMIT,
