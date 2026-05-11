@@ -1,29 +1,25 @@
-# CoinDCX Ruby Client
+# CoinDCX Ruby Client Docs
 
-Production-grade Ruby client for CoinDCX REST + Socket.io APIs.
+Production-oriented documentation for the current `coindcx-client` SDK implementation.
 
-## Docs
+## Recommended reading order
 
-- [Core Usage](./core.md)
-- [Rails Integration](./rails_integration.md)
-- [Standalone Trading Bot](./standalone_bot.md)
+1. [Core Usage](./core.md) — quickest path to first successful API and WebSocket calls.
+2. [Configuration Reference](./configuration_reference.md) — complete runtime knobs and when to tune them.
+3. [Use-case Playbook](./use_case_playbook.md) — implementation patterns for common developer workflows.
+4. [Rails Integration](./rails_integration.md) — adapter + event-driven integration in Rails apps.
+5. [Standalone Trading Bot](./standalone_bot.md) — event-loop architecture outside Rails.
 
-## Philosophy
+## What this SDK solves
 
-- Stateless client
-- No trading logic
-- Deterministic execution
-- Event-driven compatible
+- CoinDCX REST and Socket.io access with explicit namespace coverage
+- Predictable auth/signing and structured error handling
+- Guardrails around retries, idempotency, and write-path safety
+- Reconnect + subscription replay for websocket workflows
 
-## Notes
+## What remains in your app
 
-These docs use the current implemented `CoinDCX` namespace and API surface from this repository.
-Application-level concerns like `EventBus`, position tracking, caching, and exit logic remain outside the gem.
-
-### Runtime contract
-
-- REST requests are validated locally before serialization when the gem knows the required boundary rules.
-- Mutable order endpoints are never auto-retried unless the caller supplies an idempotency key such as `client_order_id`.
-- WebSocket delivery is at-least-once across reconnects. Consumers must tolerate duplicate events.
-- Public and private subscriptions are replayed after reconnect. Private subscriptions regenerate auth payloads on every reconnect.
-- The gem does not guarantee durable event replay from CoinDCX. If the socket dies, missed events during downtime are the host app's responsibility.
+- trading strategy decisions
+- position/risk lifecycle
+- persistence and reconciliation policies
+- deduplication rules for at-least-once stream delivery
