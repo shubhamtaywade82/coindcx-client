@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reworked developer documentation for faster onboarding: README now includes a 5-minute quickstart, docs index now has recommended reading order, and new guides cover configuration tuning plus use-case recipes.
 - Added funding REST namespace (`client.funding.orders`) with `fetch_orders`, `lend`, and `settle` endpoint coverage.
 - Futures REST now covers `/exchange/v1/derivatives/futures/trades`, `/market_data/v3/current_prices/futures/rt`, `/api/v1/derivatives/futures/data/stats`, and `/api/v1/derivatives/futures/data/conversions`.
 - WebSocket public channels now expose constants for documented events: `candlestick`, `depth-snapshot`, `depth-update`, `new-trade`, and `price-change`.

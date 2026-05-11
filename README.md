@@ -1,22 +1,99 @@
 # coindcx-client
 
-`coindcx-client` is a CoinDCX-specific Ruby client built from a layered exchange-client architecture rather than a thin wrapper.
+`coindcx-client` is a CoinDCX-specific Ruby SDK focused on fast integration, safer defaults, and predictable behavior for production trading systems.
+
+## Quick start (5 minutes)
+
+1. **Install the gem**
+
+   ```ruby
+   gem 'coindcx-client'
+   ```
+
+2. **Configure credentials and runtime knobs**
+
+   ```ruby
+   require 'logger'
+   require 'coindcx'
+
+   CoinDCX.configure do |config|
+     config.api_key = ENV.fetch('COINDCX_API_KEY')
+     config.api_secret = ENV.fetch('COINDCX_API_SECRET')
+     config.logger = Logger.new($stdout)
+
+     # retries
+     config.max_retries = 2
+     config.retry_base_interval = 0.25
+
+     # websocket health + reconnect
+     config.socket_reconnect_attempts = 5
+     config.socket_reconnect_interval = 1.0
+     config.socket_heartbeat_interval = 10.0
+     config.socket_liveness_timeout = 60.0
+
+     # critical write-path protection
+     config.circuit_breaker_threshold = 3
+     config.circuit_breaker_cooldown = 30.0
+   end
+   ```
+
+3. **Create client and call a public endpoint**
+
+   ```ruby
+   client = CoinDCX.client
+   puts client.public.market_data.list_tickers.first
+   ```
+
+4. **Place a private order with idempotency**
+
+   ```ruby
+   require 'securerandom'
+
+   client.spot.orders.create(
+     side: 'buy',
+     order_type: 'limit_order',
+     market: 'SNTBTC',
+     price_per_unit: '0.03244',
+     total_quantity: 400,
+     client_order_id: SecureRandom.uuid
+   )
+   ```
+
+5. **Subscribe to live prices**
+
+   ```ruby
+   prices_channel = CoinDCX::WS::PublicChannels.price_stats(pair: 'B-BTC_USDT')
+
+   client.ws.connect
+   client.ws.subscribe_public(channel_name: prices_channel, event_name: 'price-change') do |payload|
+     puts payload
+   end
+   ```
 
 ## Documentation
 
 - [Docs index](./docs/README.md)
 - [Core usage](./docs/core.md)
+- [Configuration reference](./docs/configuration_reference.md)
+- [Use-case playbook](./docs/use_case_playbook.md)
 - [Rails integration](./docs/rails_integration.md)
 - [Standalone trading bot](./docs/standalone_bot.md)
 
-## Design goals
+## Why this SDK as a first choice for CoinDCX
 
-- keep transport, auth, resources, models, and websockets separate
-- model CoinDCX namespaces explicitly: public, spot, margin, user, transfers, and futures
-- keep the gem stateless and leave strategy, position tracking, and risk logic to the host app
-- preserve CoinDCX websocket constraints instead of flattening them into a generic websocket abstraction
-- enforce endpoint-aware rate limiting at the transport boundary
-- fail with structured errors that trading code can classify cleanly
+- CoinDCX namespaces are modeled explicitly (public, spot, margin, user, transfers, futures, funding)
+- Built-in request validation for high-risk write paths
+- Endpoint-family rate limiting to protect order capacity
+- Structured error classes for deterministic retry/abort branches
+- WebSocket reconnect, liveness checks, private auth refresh, and subscription replay
+- Stateless boundary so your app can own strategy/risk/persistence cleanly
+
+## Developer fast path by use case
+
+- **Backend API service**: start with `docs/core.md` + `docs/configuration_reference.md`
+- **Rails app**: start with `docs/rails_integration.md`
+- **Standalone bot/worker**: start with `docs/standalone_bot.md`
+- **Endpoint or stream coverage planning**: start with `docs/use_case_playbook.md`
 
 ## Structure
 
@@ -35,50 +112,6 @@ lib/coindcx/contracts/
 lib/coindcx/utils/
 docs/
 ```
-
-## Installation
-
-```ruby
-gem 'coindcx-client'
-```
-
-For local development:
-
-```bash
-bundle install
-```
-
-## Configuration
-
-```ruby
-require 'logger'
-require 'coindcx'
-
-CoinDCX.configure do |config|
-  config.api_key = ENV.fetch('COINDCX_API_KEY')
-  config.api_secret = ENV.fetch('COINDCX_API_SECRET')
-  config.logger = Logger.new($stdout)
-
-  # HTTP retry tuning
-  config.max_retries = 2
-  config.retry_base_interval = 0.25
-  config.market_data_retry_budget = 2
-  config.private_read_retry_budget = 1
-  config.idempotent_order_retry_budget = 1
-
-  # Socket reconnect tuning
-  config.socket_reconnect_attempts = 5
-  config.socket_reconnect_interval = 1.0
-  config.socket_heartbeat_interval = 10.0
-  config.socket_liveness_timeout = 60.0
-
-  # Critical order-endpoint protection
-  config.circuit_breaker_threshold = 3
-  config.circuit_breaker_cooldown = 30.0
-end
-```
-
-By default the websocket layer uses `socket.io-client-simple`. You can still override the backend with `socket_io_backend_factory` when you need a custom adapter.
 
 ## REST usage
 
@@ -119,15 +152,13 @@ client.funding.orders.lend(currency_short_name: 'USDT', amount: '10')
 client.funding.orders.settle(id: 'funding-order-id')
 ```
 
-## Websocket usage
+## WebSocket usage
 
-CoinDCX documents Socket.io for websocket access. This gem keeps that boundary explicit and now tracks connection state, heartbeat liveness, private auth renewal, and subscription replay after reconnects.
+CoinDCX documents Socket.io for websocket access. This SDK keeps that boundary explicit and tracks connection state, heartbeat liveness, private auth renewal, and subscription replay after reconnect.
 
-Socket.IO often delivers **multiple data arguments** after the event name (for example a channel string plus the quote object). The client **coalesces** those into a single Hash (merging multiple Hash frames) before invoking your block, so handlers always see one payload object.
+Socket.IO may deliver **multiple data arguments** after the event name. The client coalesces those frames into a single payload object.
 
-Live streams frequently wrap quotes as `{ "event" => "price-change", "data" => "<JSON string>" }`. The client **parses** that `data` string and **merges** the inner object to the top level before dispatch, so fields like `p` and `s` are directly on the hash passed to your block.
-
-**Fan-out:** one underlying listener is registered per `event_name` (for example all `price-change` subscriptions share it). Every handler for that event runs on **every** message. For multiple instruments, filter using payload hints such as `s`, `pair`, or `market` (see `scripts/futures_ws_subscription_smoke.rb`).
+Live streams often wrap quotes as `{ "event" => "price-change", "data" => "<JSON string>" }`. The client parses and merges the inner object so keys like `p` and `s` are available directly.
 
 ```ruby
 client = CoinDCX.client
@@ -135,30 +166,23 @@ prices_channel = CoinDCX::WS::PublicChannels.price_stats(pair: 'B-BTC_USDT')
 
 client.ws.connect
 client.ws.subscribe_public(channel_name: prices_channel, event_name: 'price-change') do |payload|
+  # filter by symbol when one event fan-outs multiple instruments
+  next unless payload['s'] == 'B-BTC_USDT'
+
   puts payload
 end
 ```
 
 ## Trading safety rules
 
-- Always supply `client_order_id` when placing orders. The gem will not retry mutable order creation without it.
-- Persist `client_order_id` in your host application so a timeout can be reconciled safely.
-- Order create and transfer requests validate required fields before sending them to CoinDCX.
-- WebSocket subscriptions are replayed automatically after reconnect, and private subscriptions rebuild auth payloads on every reconnect.
-- WebSocket delivery is `at_least_once`. Consumers must tolerate duplicates after reconnect.
-- The gem does not guarantee lossless recovery of events missed while CoinDCX was disconnected.
-
-Private subscriptions use the documented `coindcx` channel signing flow:
-
-```ruby
-client.ws.subscribe_private(event_name: CoinDCX::WS::PrivateChannels::ORDER_UPDATE_EVENT) do |payload|
-  puts payload
-end
-```
+- Always pass `client_order_id` for mutable order creation APIs.
+- Persist your idempotency key in your host app before API submission.
+- WebSocket delivery is at-least-once across reconnects; dedupe when needed.
+- Reconciliate missed events after downtime via REST snapshots in your app.
 
 ## Error handling
 
-The transport raises structured errors so calling code can branch intentionally without parsing strings:
+The transport raises structured errors so calling code can branch intentionally:
 
 - `CoinDCX::Errors::AuthError`
 - `CoinDCX::Errors::RateLimitError`
@@ -174,51 +198,8 @@ The transport raises structured errors so calling code can branch intentionally 
 
 Every API error exposes normalized metadata through `status`, `category`, `code`, `request_context`, and `retryable`.
 
-## Rate limiting
-
-`CoinDCX::Configuration` ships with named buckets for authenticated endpoint families and enforces them before the request is sent.
-
-Read and write paths are separated so market data traffic does not consume order-placement capacity. Private endpoints require an explicit bucket definition.
-
-Spot order buckets include:
-
-- `spot_create_order_multiple`
-- `spot_create_order`
-- `spot_cancel_all`
-- `spot_order_status_multiple`
-- `spot_order_status`
-- `spot_cancel_multiple_by_id`
-- `spot_cancel_order`
-- `spot_active_order`
-- `spot_active_order_count`
-- `spot_trade_history`
-- `spot_edit_price`
-
-Additional private endpoint families ship with conservative defaults until exchange-specific limits are confirmed.
-
 ## Stateless boundary
 
-This gem is intentionally limited to:
+This SDK is intentionally limited to API calls, signing, socket management, and lightweight parsing/typed facades.
 
-- API calls
-- signing
-- socket connection management
-- lightweight parsing and typed facades
-
-This gem intentionally does **not** own:
-
-- position tracking
-- order lifecycle orchestration outside the API response shape
-- strategy logic
-- risk management
-- application caching
-- persistence of idempotency keys
-- reconciliation of missed websocket events after downtime
-
-## Notes
-
-- spot market data stays under `rest/public`
-- futures market data lives under `rest/futures`, even when it uses public hosts
-- websocket order book parsing is snapshot-oriented and preserves CoinDCX's "up to 50 recent orders" constraint
-- the websocket layer uses Socket.io and does not masquerade as a plain websocket client
-- release tags are expected to be immutable once published
+This SDK intentionally does **not** own strategy, risk, position lifecycle, persistence, or reconciliation policy.
